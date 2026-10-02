@@ -976,7 +976,7 @@ function api(method, path, body) {
   });
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; }); }
-function serverSession() { return api('GET', '/api/session').then(function (j) { srv.admin = !!j.admin; return j; }).catch(function () { return {}; }); }
+function serverSession() { return api('GET', '/api/session').then(function (j) { srv.admin = !!j.admin; srv.checked = true; return j; }).catch(function () { srv.checked = true; return {}; }); }
 function loginBox(msg) {
   var m = $('#modal');
   m.innerHTML = '<form class="modalBox" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT">' + LOGO +
@@ -1521,24 +1521,29 @@ function buildContent(d, photos) {
     '<script type="application/json" id="juz-photos">' + json(photos) + '<\/script>' +
     '<script id="juz-app">' + $('#juz-app').textContent + '<\/script>';
 }
-function saveServer() {
+function saveServer(opts) {
+  opts = opts || {}; // opts.quiet: the weekly task saves — report problems in the return value, open no dialogs
   var photos = {}; draft.teachers.forEach(function (t) { if (draftPhotos[t.id]) photos[t.id] = draftPhotos[t.id]; });
   publishing = true; refreshStatus();
   var btn = $('#aSave'); if (btn) btn.textContent = 'Сақталуда…';
-  api('PUT', '/api/data', { state: draft, photos: photos, baseRev: D.rev || 0 }).then(function (j) {
+  return api('PUT', '/api/data', { state: draft, photos: photos, baseRev: D.rev || 0 }).then(function (j) {
     D = j.state; P = j.photos || {}; draft = clone(D); draftPhotos = Object.assign({}, P); photosDirty = false; publishing = false;
-    renderAdmin(); renderHeader(); toast('Сақталды — сайт жаңартылды');
+    if (admin.open) renderAdmin(); renderHeader(); toast('Сақталды — сайт жаңартылды');
+    return { ok: true, rev: D.rev };
   }).catch(function (e) {
     publishing = false; if (btn) btn.textContent = 'Сақтау және жариялау'; refreshStatus();
-    if (e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріп, «Сақтау» батырмасын қайта басыңыз.'); return; }
+    var out = { ok: false, status: e.status || 0, message: (e.body && e.body.message) || e.message };
+    if (opts.quiet) return out;
+    if (e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріп, «Сақтау» батырмасын қайта басыңыз.'); return out; }
     if (e.status === 409) {
       confirmBox('Сайттың жаңа нұсқасы бар', 'Панельді ашқаннан кейін сайт басқа жерден (басқа құрылғыдан не басқа әкімшіден) жаңартылған. Жаңа нұсқаны ашып, өзгерістерді қайта енгізіңіз.', 'Жаңа нұсқаны ашу').then(function (ok) {
         if (!ok) return;
         serverLoad().then(function () { draft = clone(D); draftPhotos = Object.assign({}, P); photosDirty = false; renderAdmin(); renderHeader(); });
       });
-      return;
+      return out;
     }
     toast(e.body && e.body.message ? e.body.message : 'Сақтау сәтсіз аяқталды. Қайталап көріңіз.', 'bad');
+    return out;
   });
 }
 function save() {
@@ -1596,6 +1601,98 @@ function resumeAfterSave() {
     });
   }
 }
+
+/* ================= weekly task hooks (Claude's scheduled task on the owner's computer) =================
+   The task reads SapaLine in the owner's browser, then opens /admin#juz=<data> from the SapaLine tab, so the
+   numbers travel inside the browser and are never retyped. Everything below needs the admin to be logged in:
+   saving goes through the same PUT /api/data (cookie) as the «Сақтау» button.
+   #juz= payload: { v: 1, items: [{ subject: 'math'|'geometry', line: 'smart'|'junior', period: '3-АЙ 4-АПТА',
+     rows: [[date, time, teacher, agym, liked, avg, disliked]] (liked..disliked null when the lesson has no survey),
+     expect: { liked, avg, disliked, lessons } (sums over the rows that have a survey, counted on the SapaLine side) }] } */
+var autoPending = null, autoItems = null;
+function autoReadHash() {
+  var m = /[#&]juz=([^&]*)/.exec(location.hash || '');
+  if (!m) return;
+  try { autoPending = JSON.parse(decodeURIComponent(m[1])); } catch (e) { autoPending = { error: 'payload could not be read' }; }
+  if (!autoPending || (!autoPending.error && !Array.isArray(autoPending.items))) autoPending = { error: 'payload has no items' };
+  autoItems = null;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+}
+autoReadHash();
+window.addEventListener('hashchange', autoReadHash); // the same tab opened /admin#juz=… again without reloading
+function autoIsAdmin() { return SERVER ? !!srv.admin : !!admin.canEdit; }
+// merges the SapaLine items into `state` (in place) and checks every item against the sums counted on SapaLine
+function autoMerge(state, items) {
+  var reports = [], problems = [];
+  items.forEach(function (it) {
+    var line = String((it && it.line) || 'smart').toUpperCase();
+    var rows = ((it && it.rows) || []).map(function (r) {
+      r = r || [];
+      return { date: r[0], time: r[1], teacher: r[2], agym: r[3], survey: r[4] == null ? null : { liked: r[4], avg: r[5], disliked: r[6] } };
+    });
+    var withSurvey = rows.filter(function (r) { return r.survey && (+r.survey.liked || 0) + (+r.survey.avg || 0) + (+r.survey.disliked || 0) > 0; }).length;
+    if (!withSurvey) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'no lesson with a survey yet', rows: rows.length }); return; }
+    var rep = mergeSapa(state, { subject: it.subject, line: line, period: it.period, rows: rows }, { uid: uid, publish: true });
+    var got = rep.lines.reduce(function (a, l) { a.liked += l.liked; a.avg += l.avg; a.disliked += l.disliked; a.lessons += l.lessons; return a; }, { liked: 0, avg: 0, disliked: 0, lessons: 0 });
+    var want = it.expect;
+    if (!want) problems.push(rep.subject + ' ' + line + ' ' + rep.period + ': no expect sums were sent');
+    else if (+want.liked !== got.liked || +want.avg !== got.avg || +want.disliked !== got.disliked || +want.lessons !== got.lessons) {
+      problems.push(rep.subject + ' ' + line + ' ' + rep.period + ': SapaLine ' + JSON.stringify(want) + ' but the site counted ' + JSON.stringify(got));
+    }
+    var T = got.liked + got.avg + got.disliked;
+    reports.push({ subject: rep.subject, line: line, period: rep.period, published: rep.published, lessons: rep.lessons, overall: fmtPct(T ? 100 * got.liked / T : null) + '%',
+      teachers: rep.lines.map(function (l) { return l.name + ' · ' + l.code + ': ' + fmtPct(l.pct) + '% (' + l.lessons + ' сабақ)'; }),
+      noSurvey: rep.missing, added: rep.added, created: rep.created });
+  });
+  return { reports: reports, problems: problems };
+}
+window.juzAuto = {
+  v: 1,
+  status: function () {
+    return { v: 1, server: SERVER, loaded: !!D, checked: SERVER ? !!srv.checked : true, admin: autoIsAdmin(), rev: D ? D.rev : null,
+      pending: autoPending && autoPending.items ? autoPending.items.length : 0, pendingError: (autoPending && autoPending.error) || null,
+      imported: !!autoItems, dirty: isDirty(), saving: !!publishing };
+  },
+  importPending: function () {
+    if (!D) return { ok: false, error: 'page still loading' };
+    if (!autoIsAdmin()) return { ok: false, error: 'not logged in as admin' };
+    if (!autoPending || !autoPending.items) return { ok: false, error: (autoPending && autoPending.error) || 'nothing to import' };
+    if (isDirty()) return { ok: false, error: 'the admin panel has unsaved changes; reload the page first' };
+    var work = clone(D), out;
+    try { out = autoMerge(work, autoPending.items); } catch (e) { return { ok: false, error: (e && e.message) || 'import failed' }; }
+    if (out.problems.length) return { ok: false, error: 'numbers do not match', problems: out.problems, reports: out.reports };
+    autoItems = autoPending.items; autoPending = null;
+    draft = work; draftPhotos = Object.assign({}, P); photosDirty = false;
+    if (admin.open) renderAdmin(); renderHeader();
+    return { ok: true, changed: isDirty(), reports: out.reports };
+  },
+  save: function () {
+    if (!SERVER) return Promise.resolve({ ok: false, error: 'only on the deployed site' });
+    if (publishing) return Promise.resolve({ ok: false, error: 'a save is already running' });
+    if (!autoItems) return Promise.resolve({ ok: false, error: 'run importPending() first' });
+    if (!isDirty()) return Promise.resolve({ ok: true, unchanged: true, rev: D.rev });
+    return saveServer({ quiet: true }).then(function (r) {
+      if (r.ok || r.status !== 409) return r;
+      // saved from somewhere else meanwhile: take the newest data, merge the same SapaLine numbers again, save once more
+      return serverLoad().then(function () {
+        var work = clone(D), out;
+        try { out = autoMerge(work, autoItems); } catch (e) { return { ok: false, error: (e && e.message) || 'import failed after reloading' }; }
+        if (out.problems.length) return { ok: false, error: 'numbers do not match after reloading', problems: out.problems };
+        draft = work; draftPhotos = Object.assign({}, P); photosDirty = false;
+        if (!isDirty()) return { ok: true, unchanged: true, rev: D.rev, retried: true };
+        return saveServer({ quiet: true }).then(function (r2) { r2.retried = true; return r2; });
+      });
+    });
+  },
+  // what a visitor sees now (no cookie): the revision and the weeks that are on the site
+  verify: function () {
+    return fetch('/api/data', { credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      var s = j.state || {}, weeks = [];
+      (s.months || []).forEach(function (m) { (m.weeks || []).forEach(function (w) { weeks.push(m.label + ' ' + w.label + ': ' + Object.keys((s.results || {})[w.id] || {}).length + ' rows'); }); });
+      return { rev: s.rev, weeks: weeks };
+    });
+  }
+};
 
 /* ================= boot ================= */
 function boot(hot) {
