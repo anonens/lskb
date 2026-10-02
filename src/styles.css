@@ -80,6 +80,11 @@ button{font:inherit;color:inherit}
 .weekBtn[data-draft]::after{content:" · жоба";opacity:.6;text-transform:lowercase;letter-spacing:.02em}
 .adminBtn{flex:none;cursor:pointer;border:0;border-radius:999px;padding:7px 14px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:var(--acc);color:var(--chipfg);box-shadow:0 6px 18px -8px var(--abyss)}
 .adminBtn[data-dirty]::before{content:"";display:inline-block;width:7px;height:7px;border-radius:9px;background:var(--warn);margin-right:7px;vertical-align:1px}
+.subj .adminBtn{display:inline-flex;align-items:center;gap:7px;box-shadow:none;margin-left:2px;padding:5px 13px 5px 9px;font-weight:600;background:color-mix(in oklab,var(--acc) 30%,transparent);color:var(--ink);transition:background .25s var(--ease),color .25s var(--ease)}
+.subj .adminBtn:hover{background:var(--acc);color:var(--chipfg)}
+.subj .adminBtn[hidden]{display:none!important}
+.adminBtn svg{width:12px;height:12px;flex:none;fill:currentColor}
+.subj .adminBtn[data-dirty]::before{margin-right:0}
 
 /* ---------- acts ---------- */
 @property --a{syntax:"<number>";inherits:true;initial-value:1}
@@ -360,7 +365,8 @@ button{font:inherit;color:inherit}
   .subjBtn .full{display:none}.subjBtn .short{display:inline}
   .weeks{order:5;flex:1 1 100%;margin-left:0}
   .weekBtn{padding:5px 11px;font-size:10px}
-  .adminBtn{margin-left:auto;padding:6px 11px;font-size:10px}
+  .adminBtn{padding:6px 11px;font-size:10px}
+  .subj .adminBtn{padding:5px 10px 5px 8px;margin-left:1px}
   .act.teacher,.act.outro,.act.intro{height:auto}
   .act .pin{position:relative;height:auto;min-height:100svh;overflow:hidden}
   .act .flow{height:auto;min-height:100svh;padding-top:116px;padding-bottom:40px}

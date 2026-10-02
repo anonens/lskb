@@ -1,9 +1,9 @@
 {
  "state": {
   "v": 1,
-  "rev": 4,
-  "saveId": "v_i2akx41",
-  "updatedAt": "2026-10-02T15:45:53.481Z",
+  "rev": 5,
+  "saveId": "claude-59d7c771",
+  "updatedAt": "2026-10-02T18:23:55.123Z",
   "subjects": {
    "math": {
     "name": "Математика",
@@ -15,7 +15,7 @@
    },
    "geo": {
     "name": "Геометрия",
-    "short": "Гео",
+    "short": "Геом",
     "eyebrow": "LIVE сабақ — кері байланыс",
     "title": "LS кері байланыс",
     "lede": "Геометрия мұғалімдері LIVE сабаққа кері байланысты сапалы алуы үшін эксклюзивті жасалды.",
@@ -86,7 +86,7 @@
     "id": "t_kuanysh",
     "full": "Нұрдәулет Қуаныш",
     "display": "Қуаныш ағай",
-    "sapa": "Нұрдәулет Қуаныш"
+    "sapa": "Қуаныш Нұрдәулет"
    },
    {
     "id": "t_amangeldi",
@@ -117,6 +117,12 @@
     "full": "Даулетұлы Нұрасыл",
     "display": "Нұрасыл ағай",
     "sapa": "Даулетұлы Нұрасыл"
+   },
+   {
+    "id": "t_1c6130b",
+    "full": "Арысбек Нұрболат",
+    "display": "Нұрболат ағай",
+    "sapa": "Арысбек Нұрболат"
    }
   ],
   "months": [
@@ -212,6 +218,34 @@
       "subject": "geo",
       "streamId": "st_g21",
       "line": "SMART"
+     },
+     {
+      "id": "a_e666314",
+      "teacherId": "t_1c6130b",
+      "subject": "math",
+      "streamId": "st_m01",
+      "line": "JUNIOR"
+     },
+     {
+      "id": "a_9a3d82c",
+      "teacherId": "t_1c6130b",
+      "subject": "math",
+      "streamId": "st_m21",
+      "line": "JUNIOR"
+     },
+     {
+      "id": "a_68e9320",
+      "teacherId": "t_kuanysh",
+      "subject": "math",
+      "streamId": "st_m21",
+      "line": "JUNIOR"
+     },
+     {
+      "id": "a_12ed522",
+      "teacherId": "t_kuanysh",
+      "subject": "math",
+      "streamId": "st_m11",
+      "line": "JUNIOR"
      }
     ]
    }
@@ -305,6 +339,38 @@
      "lessons": 2,
      "notes": [],
      "src": "SapaLine · 3-АЙ 3-АПТА · 23.09"
+    },
+    "a_e666314": {
+     "liked": 68,
+     "avg": 2,
+     "disliked": 0,
+     "lessons": 1,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 3-АПТА · 24.09"
+    },
+    "a_9a3d82c": {
+     "liked": 166,
+     "avg": 8,
+     "disliked": 0,
+     "lessons": 2,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 3-АПТА · 24.09"
+    },
+    "a_68e9320": {
+     "liked": 207,
+     "avg": 10,
+     "disliked": 1,
+     "lessons": 2,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 3-АПТА · 24.09"
+    },
+    "a_12ed522": {
+     "liked": 64,
+     "avg": 3,
+     "disliked": 1,
+     "lessons": 1,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 3-АПТА · 24.09"
     }
    },
    "w_3_4": {
@@ -379,6 +445,38 @@
      "lessons": 4,
      "notes": [],
      "src": "SapaLine · 3-АЙ 4-АПТА · 01.10, 02.10"
+    },
+    "a_68e9320": {
+     "liked": 233,
+     "avg": 5,
+     "disliked": 1,
+     "lessons": 2,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 4-АПТА · 01.10"
+    },
+    "a_9a3d82c": {
+     "liked": 145,
+     "avg": 9,
+     "disliked": 2,
+     "lessons": 2,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 4-АПТА · 01.10"
+    },
+    "a_12ed522": {
+     "liked": 67,
+     "avg": 4,
+     "disliked": 0,
+     "lessons": 1,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 4-АПТА · 01.10"
+    },
+    "a_e666314": {
+     "liked": 45,
+     "avg": 2,
+     "disliked": 1,
+     "lessons": 1,
+     "notes": [],
+     "src": "SapaLine · 3-АЙ 4-АПТА · 01.10"
     }
    }
   }

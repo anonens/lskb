@@ -87,13 +87,14 @@ function pctOf(r) {
   return null;
 }
 function codeOf(s) { return s ? s.code : ''; }
+function lineRank(a) { var l = String(a.line || 'SMART').toUpperCase(); return l === 'SMART' ? 0 : l === 'JUNIOR' ? 1 : 2; }
 function entriesFor(d, weekId, subject) {
   var wk = findWeek(d, weekId); if (!wk) return [];
   var res = d.results[weekId] || {};
   return wk.m.assignments.map(function (a, i) {
     return { a: a, i: i, t: byId(d.teachers, a.teacherId), s: byId(d.streams, a.streamId), r: res[a.id] };
   }).filter(function (e) { return e.a.subject === subject && e.t && pctOf(e.r) != null; })
-    .sort(function (x, y) { return codeOf(x.s).localeCompare(codeOf(y.s), 'kk') || x.i - y.i; });
+    .sort(function (x, y) { return lineRank(x.a) - lineRank(y.a) || codeOf(x.s).localeCompare(codeOf(y.s), 'kk') || x.i - y.i; });
 }
 function visibleWeeks(d, subject, withDrafts) {
   return weeksOf(d).filter(function (x) { return (x.w.published || withDrafts) && entriesFor(d, x.id, subject).length > 0; });
@@ -119,14 +120,19 @@ function pickWeek(subject, prefer) {
 }
 
 /* ================= public render ================= */
+var KEY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1a4.5 4.5 0 0 0-4.27 5.92L1 12.15V15h2.85l.65-.65V13h1.35l.65-.65V11h1.35l1.23-1.23A4.5 4.5 0 1 0 10.5 1Zm1.25 4.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/></svg>';
+var adminBtnEl = $('#adminBtn');
+adminBtnEl.innerHTML = KEY_ICON + '<span>Әкімші</span>';
 function renderHeader() {
   var d = cur();
   $('#logoSlot').innerHTML = LOGO;
-  $('#subjNav').innerHTML = SUBJ_KEYS.map(function (k) {
+  var nav = $('#subjNav');
+  nav.innerHTML = SUBJ_KEYS.map(function (k) {
     var S = d.subjects[k];
     return '<button class="subjBtn" type="button" data-subj="' + k + '" aria-pressed="' + (k === view.subject) + '">' + emblemSVG(k) +
       '<span class="full">' + esc(S.name) + '</span><span class="short">' + esc(S.short) + '</span></button>';
   }).join('');
+  nav.appendChild(adminBtnEl); // the admin entry sits right after Geometry (hidden for visitors)
   var ws = visibleWeeks(d, view.subject, previewDrafts());
   var box = $('#weeks');
   box.innerHTML = (ws.length ? '<span class="weeksLabel">Апта</span>' : '') + ws.map(function (x) {

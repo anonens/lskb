@@ -53,9 +53,12 @@ function mergeSapa(state, payload, opts) {
   report.weekId = week.id; report.monthId = month.id;
 
   // lookups
-  var byName = {};
+  // a teacher is found by the SapaLine name, the full name, or its first two words in either order
+  // (SapaLine sometimes writes "Қуаныш Нұрдәулет" for "Нұрдәулет Қуаныш")
+  function swapKey(n) { return norm(n).split(' ').slice(0, 2).sort().join(' '); }
+  var byName = {}, bySwap = {};
   state.teachers.forEach(function (t) {
-    [t.sapa, t.full].forEach(function (n) { if (n) byName[norm(n)] = t; });
+    [t.sapa, t.full].forEach(function (n) { if (n) { byName[norm(n)] = t; if (!bySwap[swapKey(n)]) bySwap[swapKey(n)] = t; } });
     var two = String(t.full || '').trim().split(/\s+/).slice(0, 2).join(' ');
     if (two && !byName[norm(two)]) byName[norm(two)] = t;
   });
@@ -72,12 +75,12 @@ function mergeSapa(state, payload, opts) {
       report.missing.push([r.date, r.time, name || '?'].filter(Boolean).join(' '));
       return;
     }
-    var t = byName[norm(name)];
+    var t = byName[norm(name)] || bySwap[swapKey(name)];
     if (!t) {
       var parts = name.split(' '), given = parts.length > 1 ? parts[1] : parts[0];
       var female = /(қызы|кызы|ова|ева|ина|ская)$/i.test(parts[0]);
       t = { id: makeId('t'), full: name, display: given + (female ? ' апай' : ' ағай'), sapa: name };
-      state.teachers.push(t); byName[norm(name)] = t;
+      state.teachers.push(t); byName[norm(name)] = t; bySwap[swapKey(name)] = t;
       report.added.push('мұғалім ' + name + ' → «' + t.display + '» (атын, фотосын тексеріңіз)');
     } else if (!t.sapa) {
       t.sapa = name;
@@ -88,7 +91,7 @@ function mergeSapa(state, payload, opts) {
       state.streams.push(st); byCode[norm(code)] = st;
       report.added.push('поток ' + code);
     }
-    var a = find(month.assignments, function (x) { return x.teacherId === t.id && x.subject === subject && x.streamId === st.id; });
+    var a = find(month.assignments, function (x) { return x.teacherId === t.id && x.subject === subject && x.streamId === st.id && String(x.line || 'SMART').toUpperCase() === lineName; });
     if (!a) {
       a = { id: makeId('a'), teacherId: t.id, subject: subject, streamId: st.id, line: lineName };
       month.assignments.push(a);
@@ -103,11 +106,11 @@ function mergeSapa(state, payload, opts) {
 
   if (!state.results[week.id]) state.results[week.id] = {};
   var res = state.results[week.id];
-  // replace this subject's SapaLine numbers for the week; keep notes the admin already wrote,
+  // replace this subject's (and this line's: SMART / JUNIOR) SapaLine numbers for the week; keep notes the admin already wrote,
   // and leave rows that were typed in by hand (their source is not SapaLine) as they are
   month.assignments.forEach(function (a) {
     var old = res[a.id];
-    if (a.subject !== subject || acc[a.id] || !old || !/^SapaLine/.test(old.src || '')) return;
+    if (a.subject !== subject || String(a.line || 'SMART').toUpperCase() !== lineName || acc[a.id] || !old || !/^SapaLine/.test(old.src || '')) return;
     if (old.notes && old.notes.length) res[a.id] = { notes: old.notes };
     else delete res[a.id];
   });

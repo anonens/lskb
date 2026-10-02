@@ -95,6 +95,11 @@ button{font:inherit;color:inherit}
 .weekBtn[data-draft]::after{content:" · жоба";opacity:.6;text-transform:lowercase;letter-spacing:.02em}
 .adminBtn{flex:none;cursor:pointer;border:0;border-radius:999px;padding:7px 14px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:var(--acc);color:var(--chipfg);box-shadow:0 6px 18px -8px var(--abyss)}
 .adminBtn[data-dirty]::before{content:"";display:inline-block;width:7px;height:7px;border-radius:9px;background:var(--warn);margin-right:7px;vertical-align:1px}
+.subj .adminBtn{display:inline-flex;align-items:center;gap:7px;box-shadow:none;margin-left:2px;padding:5px 13px 5px 9px;font-weight:600;background:color-mix(in oklab,var(--acc) 30%,transparent);color:var(--ink);transition:background .25s var(--ease),color .25s var(--ease)}
+.subj .adminBtn:hover{background:var(--acc);color:var(--chipfg)}
+.subj .adminBtn[hidden]{display:none!important}
+.adminBtn svg{width:12px;height:12px;flex:none;fill:currentColor}
+.subj .adminBtn[data-dirty]::before{margin-right:0}
 
 /* ---------- acts ---------- */
 @property --a{syntax:"<number>";inherits:true;initial-value:1}
@@ -375,7 +380,8 @@ button{font:inherit;color:inherit}
   .subjBtn .full{display:none}.subjBtn .short{display:inline}
   .weeks{order:5;flex:1 1 100%;margin-left:0}
   .weekBtn{padding:5px 11px;font-size:10px}
-  .adminBtn{margin-left:auto;padding:6px 11px;font-size:10px}
+  .adminBtn{padding:6px 11px;font-size:10px}
+  .subj .adminBtn{padding:5px 10px 5px 8px;margin-left:1px}
   .act.teacher,.act.outro,.act.intro{height:auto}
   .act .pin{position:relative;height:auto;min-height:100svh;overflow:hidden}
   .act .flow{height:auto;min-height:100svh;padding-top:116px;padding-bottom:40px}
@@ -515,9 +521,12 @@ function mergeSapa(state, payload, opts) {
   report.weekId = week.id; report.monthId = month.id;
 
   // lookups
-  var byName = {};
+  // a teacher is found by the SapaLine name, the full name, or its first two words in either order
+  // (SapaLine sometimes writes "Қуаныш Нұрдәулет" for "Нұрдәулет Қуаныш")
+  function swapKey(n) { return norm(n).split(' ').slice(0, 2).sort().join(' '); }
+  var byName = {}, bySwap = {};
   state.teachers.forEach(function (t) {
-    [t.sapa, t.full].forEach(function (n) { if (n) byName[norm(n)] = t; });
+    [t.sapa, t.full].forEach(function (n) { if (n) { byName[norm(n)] = t; if (!bySwap[swapKey(n)]) bySwap[swapKey(n)] = t; } });
     var two = String(t.full || '').trim().split(/\s+/).slice(0, 2).join(' ');
     if (two && !byName[norm(two)]) byName[norm(two)] = t;
   });
@@ -534,12 +543,12 @@ function mergeSapa(state, payload, opts) {
       report.missing.push([r.date, r.time, name || '?'].filter(Boolean).join(' '));
       return;
     }
-    var t = byName[norm(name)];
+    var t = byName[norm(name)] || bySwap[swapKey(name)];
     if (!t) {
       var parts = name.split(' '), given = parts.length > 1 ? parts[1] : parts[0];
       var female = /(қызы|кызы|ова|ева|ина|ская)$/i.test(parts[0]);
       t = { id: makeId('t'), full: name, display: given + (female ? ' апай' : ' ағай'), sapa: name };
-      state.teachers.push(t); byName[norm(name)] = t;
+      state.teachers.push(t); byName[norm(name)] = t; bySwap[swapKey(name)] = t;
       report.added.push('мұғалім ' + name + ' → «' + t.display + '» (атын, фотосын тексеріңіз)');
     } else if (!t.sapa) {
       t.sapa = name;
@@ -550,7 +559,7 @@ function mergeSapa(state, payload, opts) {
       state.streams.push(st); byCode[norm(code)] = st;
       report.added.push('поток ' + code);
     }
-    var a = find(month.assignments, function (x) { return x.teacherId === t.id && x.subject === subject && x.streamId === st.id; });
+    var a = find(month.assignments, function (x) { return x.teacherId === t.id && x.subject === subject && x.streamId === st.id && String(x.line || 'SMART').toUpperCase() === lineName; });
     if (!a) {
       a = { id: makeId('a'), teacherId: t.id, subject: subject, streamId: st.id, line: lineName };
       month.assignments.push(a);
@@ -565,11 +574,11 @@ function mergeSapa(state, payload, opts) {
 
   if (!state.results[week.id]) state.results[week.id] = {};
   var res = state.results[week.id];
-  // replace this subject's SapaLine numbers for the week; keep notes the admin already wrote,
+  // replace this subject's (and this line's: SMART / JUNIOR) SapaLine numbers for the week; keep notes the admin already wrote,
   // and leave rows that were typed in by hand (their source is not SapaLine) as they are
   month.assignments.forEach(function (a) {
     var old = res[a.id];
-    if (a.subject !== subject || acc[a.id] || !old || !/^SapaLine/.test(old.src || '')) return;
+    if (a.subject !== subject || String(a.line || 'SMART').toUpperCase() !== lineName || acc[a.id] || !old || !/^SapaLine/.test(old.src || '')) return;
     if (old.notes && old.notes.length) res[a.id] = { notes: old.notes };
     else delete res[a.id];
   });
@@ -639,13 +648,14 @@ function pctOf(r) {
   return null;
 }
 function codeOf(s) { return s ? s.code : ''; }
+function lineRank(a) { var l = String(a.line || 'SMART').toUpperCase(); return l === 'SMART' ? 0 : l === 'JUNIOR' ? 1 : 2; }
 function entriesFor(d, weekId, subject) {
   var wk = findWeek(d, weekId); if (!wk) return [];
   var res = d.results[weekId] || {};
   return wk.m.assignments.map(function (a, i) {
     return { a: a, i: i, t: byId(d.teachers, a.teacherId), s: byId(d.streams, a.streamId), r: res[a.id] };
   }).filter(function (e) { return e.a.subject === subject && e.t && pctOf(e.r) != null; })
-    .sort(function (x, y) { return codeOf(x.s).localeCompare(codeOf(y.s), 'kk') || x.i - y.i; });
+    .sort(function (x, y) { return lineRank(x.a) - lineRank(y.a) || codeOf(x.s).localeCompare(codeOf(y.s), 'kk') || x.i - y.i; });
 }
 function visibleWeeks(d, subject, withDrafts) {
   return weeksOf(d).filter(function (x) { return (x.w.published || withDrafts) && entriesFor(d, x.id, subject).length > 0; });
@@ -671,14 +681,19 @@ function pickWeek(subject, prefer) {
 }
 
 /* ================= public render ================= */
+var KEY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1a4.5 4.5 0 0 0-4.27 5.92L1 12.15V15h2.85l.65-.65V13h1.35l.65-.65V11h1.35l1.23-1.23A4.5 4.5 0 1 0 10.5 1Zm1.25 4.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/></svg>';
+var adminBtnEl = $('#adminBtn');
+adminBtnEl.innerHTML = KEY_ICON + '<span>Әкімші</span>';
 function renderHeader() {
   var d = cur();
   $('#logoSlot').innerHTML = LOGO;
-  $('#subjNav').innerHTML = SUBJ_KEYS.map(function (k) {
+  var nav = $('#subjNav');
+  nav.innerHTML = SUBJ_KEYS.map(function (k) {
     var S = d.subjects[k];
     return '<button class="subjBtn" type="button" data-subj="' + k + '" aria-pressed="' + (k === view.subject) + '">' + emblemSVG(k) +
       '<span class="full">' + esc(S.name) + '</span><span class="short">' + esc(S.short) + '</span></button>';
   }).join('');
+  nav.appendChild(adminBtnEl); // the admin entry sits right after Geometry (hidden for visitors)
   var ws = visibleWeeks(d, view.subject, previewDrafts());
   var box = $('#weeks');
   box.innerHTML = (ws.length ? '<span class="weeksLabel">Апта</span>' : '') + ws.map(function (x) {
