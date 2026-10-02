@@ -268,6 +268,18 @@ button{font:inherit;color:inherit}
 .curtainRing.two{border-color:color-mix(in oklab,var(--frost) 40%,transparent);animation-delay:.5s}
 .curtainPlate{position:absolute;inset:0;background:var(--cyan);opacity:0;animation:plateIn 1.55s linear both}
 
+/* ---------- finale after «Таныстым»: as on the reference site, the JUZ40 emblem swallows the screen;
+   then the page returns to its first screen ---------- */
+html.finaleOn,html.finaleOn body{overflow:hidden}
+.curtain[data-mode="finale"]{cursor:pointer;animation:curtainIn .42s var(--ease) both}
+.curtain[data-mode="finale"][data-out]{animation:curtainOut .7s var(--ease) both}
+.curtain[data-mode="finale"] .curtainZ{height:auto;width:min(64vw,560px);aspect-ratio:170/53;transform-origin:68.2% 11.1%;will-change:transform,opacity;animation:zSwallowFinale 3s cubic-bezier(.66,0,.84,.2) .12s both}
+.curtain[data-mode="finale"] .curtainBloom{animation:bloomOut 2.2s var(--ease) .5s both}
+.curtain[data-mode="finale"] .curtainRing{animation:ringOut 1.7s var(--ease) .82s both}
+.curtain[data-mode="finale"] .curtainRing.two{animation-delay:1.02s}
+.curtain[data-mode="finale"] .curtainPlate{animation:plateIn 3.12s linear both}
+@keyframes zSwallowFinale{0%{opacity:0;filter:blur(18px);transform:translate(-50%,-50%) scale(.16) rotate(-18deg)}12%{opacity:1}32%{filter:blur(0);transform:translate(-50%,-50%) scale(1) rotate(0)}44%{filter:blur(0);transform:translate(-50%,-50%) scale(1.05) rotate(0)}56%{filter:blur(0);transform:translate(-50%,-50%) scale(.95) rotate(-1.5deg)}100%{opacity:1;filter:blur(0);transform:translate(-50%,-50%) scale(80) rotate(5deg)}}
+
 /* ---------- admin ---------- */
 .admin{position:fixed;inset:0;z-index:40;background:color-mix(in oklab,var(--deep) 97%,transparent);color:var(--ice);overflow:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top,0px)) 0 calc(40px + env(safe-area-inset-bottom,0px))}
@@ -932,6 +944,48 @@ function withCurtain(k, swap) {
   }, 1500);
 }
 
+/* ================= finale after «Таныстым» =================
+   As on the reference site: a full-screen curtain where the JUZ40 emblem appears and swallows the screen
+   (3 s). Then, behind the covered screen, the page goes back to its first screen and the curtain fades away.
+   A click or Escape skips ahead. */
+function finaleEmblem() {
+  var E = EMBLEM.juz40;
+  return '<svg viewBox="' + E.vb + '" aria-hidden="true"><defs><linearGradient id="zg-finale" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--z1)"/><stop offset=".48" style="stop-color:var(--z2)"/><stop offset="1" style="stop-color:var(--z3)"/></linearGradient></defs>' +
+    '<path fill="url(#zg-finale)" fill-rule="evenodd" d="' + E.d + '"/></svg>';
+}
+function finale() {
+  if (curtainBusy) return;
+  if (reduceMotion) { jumpTop(); return; }
+  curtainBusy = true;
+  var c = $('#curtain'), root = document.documentElement, back, timer;
+  c.setAttribute('data-subj', view.subject);
+  c.setAttribute('data-mode', 'finale');
+  $('#curtainZ').innerHTML = finaleEmblem();
+  c.removeAttribute('data-out'); c.hidden = false;
+  root.classList.add('finaleOn');
+  $$('#curtain, #curtain *').forEach(function (el) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; });
+  function onKey(e) { if (e.key === 'Escape') back(); }
+  back = function () {
+    if (!timer) return;
+    clearTimeout(timer); timer = null;
+    document.removeEventListener('keydown', onKey, true);
+    c.removeEventListener('click', back);
+    // the screen is covered: go back to the first screen, replay its entrance, then lift the curtain
+    jumpTop();
+    var intro = $('.act.intro');
+    if (intro) { intro.classList.remove('boot'); void intro.offsetWidth; intro.classList.add('boot'); }
+    c.setAttribute('data-out', '');
+    setTimeout(function () {
+      c.hidden = true; c.removeAttribute('data-out'); c.removeAttribute('data-mode');
+      root.classList.remove('finaleOn');
+      curtainBusy = false;
+    }, 720);
+  };
+  timer = setTimeout(back, 3500);
+  document.addEventListener('keydown', onKey, true);
+  c.addEventListener('click', back);
+}
+
 /* ================= public events ================= */
 document.addEventListener('click', function (ev) {
   var t = ev.target;
@@ -952,7 +1006,8 @@ document.addEventListener('click', function (ev) {
   if (t.closest && t.closest('#hdrHome')) { ev.preventDefault(); window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); return; }
   if (t.closest && t.closest('#ackBtn')) {
     store.set('juz.ack.' + view.subject + '.' + view.weekId, '1');
-    $('#ackWrap').innerHTML = ackMsgHTML(cur().outro, !reduceMotion);
+    $('#ackWrap').innerHTML = ackMsgHTML(cur().outro, false); // the finale plays over it
+    finale();
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }

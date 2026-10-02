@@ -253,6 +253,18 @@ button{font:inherit;color:inherit}
 .curtainRing.two{border-color:color-mix(in oklab,var(--frost) 40%,transparent);animation-delay:.5s}
 .curtainPlate{position:absolute;inset:0;background:var(--cyan);opacity:0;animation:plateIn 1.55s linear both}
 
+/* ---------- finale after «Таныстым»: as on the reference site, the JUZ40 emblem swallows the screen;
+   then the page returns to its first screen ---------- */
+html.finaleOn,html.finaleOn body{overflow:hidden}
+.curtain[data-mode="finale"]{cursor:pointer;animation:curtainIn .42s var(--ease) both}
+.curtain[data-mode="finale"][data-out]{animation:curtainOut .7s var(--ease) both}
+.curtain[data-mode="finale"] .curtainZ{height:auto;width:min(64vw,560px);aspect-ratio:170/53;transform-origin:68.2% 11.1%;will-change:transform,opacity;animation:zSwallowFinale 3s cubic-bezier(.66,0,.84,.2) .12s both}
+.curtain[data-mode="finale"] .curtainBloom{animation:bloomOut 2.2s var(--ease) .5s both}
+.curtain[data-mode="finale"] .curtainRing{animation:ringOut 1.7s var(--ease) .82s both}
+.curtain[data-mode="finale"] .curtainRing.two{animation-delay:1.02s}
+.curtain[data-mode="finale"] .curtainPlate{animation:plateIn 3.12s linear both}
+@keyframes zSwallowFinale{0%{opacity:0;filter:blur(18px);transform:translate(-50%,-50%) scale(.16) rotate(-18deg)}12%{opacity:1}32%{filter:blur(0);transform:translate(-50%,-50%) scale(1) rotate(0)}44%{filter:blur(0);transform:translate(-50%,-50%) scale(1.05) rotate(0)}56%{filter:blur(0);transform:translate(-50%,-50%) scale(.95) rotate(-1.5deg)}100%{opacity:1;filter:blur(0);transform:translate(-50%,-50%) scale(80) rotate(5deg)}}
+
 /* ---------- admin ---------- */
 .admin{position:fixed;inset:0;z-index:40;background:color-mix(in oklab,var(--deep) 97%,transparent);color:var(--ice);overflow:auto;overscroll-behavior:contain;
   padding:calc(env(safe-area-inset-top,0px)) 0 calc(40px + env(safe-area-inset-bottom,0px))}

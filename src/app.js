@@ -371,6 +371,48 @@ function withCurtain(k, swap) {
   }, 1500);
 }
 
+/* ================= finale after «Таныстым» =================
+   As on the reference site: a full-screen curtain where the JUZ40 emblem appears and swallows the screen
+   (3 s). Then, behind the covered screen, the page goes back to its first screen and the curtain fades away.
+   A click or Escape skips ahead. */
+function finaleEmblem() {
+  var E = EMBLEM.juz40;
+  return '<svg viewBox="' + E.vb + '" aria-hidden="true"><defs><linearGradient id="zg-finale" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--z1)"/><stop offset=".48" style="stop-color:var(--z2)"/><stop offset="1" style="stop-color:var(--z3)"/></linearGradient></defs>' +
+    '<path fill="url(#zg-finale)" fill-rule="evenodd" d="' + E.d + '"/></svg>';
+}
+function finale() {
+  if (curtainBusy) return;
+  if (reduceMotion) { jumpTop(); return; }
+  curtainBusy = true;
+  var c = $('#curtain'), root = document.documentElement, back, timer;
+  c.setAttribute('data-subj', view.subject);
+  c.setAttribute('data-mode', 'finale');
+  $('#curtainZ').innerHTML = finaleEmblem();
+  c.removeAttribute('data-out'); c.hidden = false;
+  root.classList.add('finaleOn');
+  $$('#curtain, #curtain *').forEach(function (el) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; });
+  function onKey(e) { if (e.key === 'Escape') back(); }
+  back = function () {
+    if (!timer) return;
+    clearTimeout(timer); timer = null;
+    document.removeEventListener('keydown', onKey, true);
+    c.removeEventListener('click', back);
+    // the screen is covered: go back to the first screen, replay its entrance, then lift the curtain
+    jumpTop();
+    var intro = $('.act.intro');
+    if (intro) { intro.classList.remove('boot'); void intro.offsetWidth; intro.classList.add('boot'); }
+    c.setAttribute('data-out', '');
+    setTimeout(function () {
+      c.hidden = true; c.removeAttribute('data-out'); c.removeAttribute('data-mode');
+      root.classList.remove('finaleOn');
+      curtainBusy = false;
+    }, 720);
+  };
+  timer = setTimeout(back, 3500);
+  document.addEventListener('keydown', onKey, true);
+  c.addEventListener('click', back);
+}
+
 /* ================= public events ================= */
 document.addEventListener('click', function (ev) {
   var t = ev.target;
@@ -391,7 +433,8 @@ document.addEventListener('click', function (ev) {
   if (t.closest && t.closest('#hdrHome')) { ev.preventDefault(); window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); return; }
   if (t.closest && t.closest('#ackBtn')) {
     store.set('juz.ack.' + view.subject + '.' + view.weekId, '1');
-    $('#ackWrap').innerHTML = ackMsgHTML(cur().outro, !reduceMotion);
+    $('#ackWrap').innerHTML = ackMsgHTML(cur().outro, false); // the finale plays over it
+    finale();
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
