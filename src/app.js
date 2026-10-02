@@ -1060,18 +1060,35 @@ function autoReadHash() {
 autoReadHash();
 window.addEventListener('hashchange', autoReadHash); // the same tab opened /admin#juz=… again without reloading
 function autoIsAdmin() { return SERVER ? !!srv.admin : !!admin.canEdit; }
-// merges the SapaLine items into `state` (in place) and checks every item against the sums counted on SapaLine
+// merges the SapaLine items into `state` (in place) and checks every item against the sums counted on SapaLine.
+// Which weeks get switched on: only the newest week of the payload, and only if that week is new on the site or
+// still has no numbers — a week the admin already has (and may have hidden on purpose) keeps its setting.
+// An older week (e.g. Junior had no lessons this week) only refreshes its numbers, and only if it is on the site.
 function autoMerge(state, items) {
   var reports = [], problems = [];
-  items.forEach(function (it) {
-    var line = String((it && it.line) || 'smart').toUpperCase();
-    var rows = ((it && it.rows) || []).map(function (r) {
+  function pkey(p) { var m = /(\d+)\s*-\s*АЙ\s*(\d+)\s*-\s*АПТА/i.exec(String(p || '')); return m ? +m[1] * 100 + +m[2] : -1; }
+  function weekOf(p) {
+    var m = /(\d+)\s*-\s*АЙ\s*(\d+)\s*-\s*АПТА/i.exec(String(p || '')); if (!m) return null;
+    var mo = (state.months || []).filter(function (x) { return String(x.label).replace(/\s+/g, '').toUpperCase() === m[1] + '-АЙ'; })[0];
+    return mo ? (mo.weeks || []).filter(function (w) { return String(w.label).replace(/\s+/g, '').toUpperCase() === m[2] + '-АПТА'; })[0] || null : null;
+  }
+  var list = items.map(function (it) {
+    it = it || {};
+    var rows = (it.rows || []).map(function (r) {
       r = r || [];
       return { date: r[0], time: r[1], teacher: r[2], agym: r[3], survey: r[4] == null ? null : { liked: r[4], avg: r[5], disliked: r[6] } };
     });
     var withSurvey = rows.filter(function (r) { return r.survey && (+r.survey.liked || 0) + (+r.survey.avg || 0) + (+r.survey.disliked || 0) > 0; }).length;
-    if (!withSurvey) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'no lesson with a survey yet', rows: rows.length }); return; }
-    var rep = mergeSapa(state, { subject: it.subject, line: line, period: it.period, rows: rows }, { uid: uid, publish: true });
+    var wk = weekOf(it.period);
+    return { it: it, rows: rows, withSurvey: withSurvey, key: pkey(it.period), week: wk, hadNumbers: !!(wk && state.results[wk.id] && Object.keys(state.results[wk.id]).length) };
+  });
+  var newest = list.reduce(function (a, x) { return x.withSurvey ? Math.max(a, x.key) : a; }, -1);
+  list.forEach(function (x) {
+    var it = x.it, line = String(it.line || 'smart').toUpperCase();
+    if (!x.withSurvey) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'no lesson with a survey yet', rows: x.rows.length }); return; }
+    if (x.key < newest && !x.week) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'an older week that is not on the site', rows: x.rows.length }); return; }
+    var publish = x.key === newest && (!x.week || !x.hadNumbers), wasOn = !!(x.week && x.week.published);
+    var rep = mergeSapa(state, { subject: it.subject, line: line, period: it.period, rows: x.rows }, { uid: uid, publish: publish });
     var got = rep.lines.reduce(function (a, l) { a.liked += l.liked; a.avg += l.avg; a.disliked += l.disliked; a.lessons += l.lessons; return a; }, { liked: 0, avg: 0, disliked: 0, lessons: 0 });
     var want = it.expect;
     if (!want) problems.push(rep.subject + ' ' + line + ' ' + rep.period + ': no expect sums were sent');
@@ -1079,7 +1096,8 @@ function autoMerge(state, items) {
       problems.push(rep.subject + ' ' + line + ' ' + rep.period + ': SapaLine ' + JSON.stringify(want) + ' but the site counted ' + JSON.stringify(got));
     }
     var T = got.liked + got.avg + got.disliked;
-    reports.push({ subject: rep.subject, line: line, period: rep.period, published: rep.published, lessons: rep.lessons, overall: fmtPct(T ? 100 * got.liked / T : null) + '%',
+    reports.push({ subject: rep.subject, line: line, period: rep.period, lessons: rep.lessons, overall: fmtPct(T ? 100 * got.liked / T : null) + '%',
+      week: rep.published ? (wasOn ? 'already on the site' : 'switched on now') : 'kept hidden (switched off in the admin panel)',
       teachers: rep.lines.map(function (l) { return l.name + ' · ' + l.code + ': ' + fmtPct(l.pct) + '% (' + l.lessons + ' сабақ)'; }),
       noSurvey: rep.missing, added: rep.added, created: rep.created });
   });
