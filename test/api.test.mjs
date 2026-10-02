@@ -121,6 +121,36 @@ async function suite(label, port, extra, checkStore) {
     }));
     assert.deepEqual(twins.map((x) => x.status).sort(), [200, 409], 'concurrent saves');
 
+    // the page quotes the version tag it loaded (baseEtag): save, save again, and again — as the admin panel does
+    let cur = (await call('GET', '/api/data', { cookie })).body;
+    assert.equal(typeof cur.etag, 'string', 'admin gets the version tag');
+    assert.ok(!/^W\//.test(cur.etag), 'a strong tag');
+    assert.equal((await call('GET', '/api/data')).body.etag, undefined, 'visitors do not');
+    for (let i = 1; i <= 3; i++) {
+      const s = structuredClone(cur.state);
+      s.outro.title = 'Қатарынан сақтау ' + i;
+      r = await call('PUT', '/api/data', { cookie, body: { state: s, photos: cur.photos, baseRev: cur.state.rev, baseEtag: cur.etag }, headers: origin });
+      assert.equal(r.status, 200, 'save ' + i + ': ' + JSON.stringify(r.body));
+      assert.equal(r.body.state.rev, cur.state.rev + 1);
+      assert.equal(typeof r.body.etag, 'string');
+      assert.notEqual(r.body.etag, cur.etag);
+      const old = cur;
+      cur = { state: r.body.state, photos: r.body.photos, etag: r.body.etag };
+      if (i === 2) {
+        const again = await call('PUT', '/api/data', { cookie, body: { state: s, photos: old.photos, baseRev: old.state.rev, baseEtag: old.etag }, headers: origin });
+        assert.equal(again.status, 409, 'an outdated tag is refused');
+      }
+    }
+    assert.equal((await call('GET', '/api/data')).body.state.outro.title, 'Қатарынан сақтау 3');
+    assert.equal((await call('PUT', '/api/data', { cookie, body: { state: cur.state, photos: cur.photos, baseRev: cur.state.rev, baseEtag: null }, headers: origin })).status, 409, '"nothing saved yet" is refused once something is');
+    assert.equal((await call('PUT', '/api/data', { cookie, body: { state: cur.state, photos: cur.photos, baseRev: cur.state.rev, baseEtag: 42 }, headers: origin })).status, 400, 'bad tag');
+    const pair = await Promise.all([1, 2].map((i) => {
+      const s = structuredClone(cur.state);
+      s.outro.text = 'Қатар ' + i;
+      return call('PUT', '/api/data', { cookie, body: { state: s, photos: cur.photos, baseRev: cur.state.rev, baseEtag: cur.etag }, headers: origin });
+    }));
+    assert.deepEqual(pair.map((x) => x.status).sort(), [200, 409], 'concurrent saves with tags');
+
     // logout
     r = await call('DELETE', '/api/session', { cookie, headers: origin });
     assert.match(r.headers.get('set-cookie'), /juz_admin=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0/);

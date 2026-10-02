@@ -975,7 +975,7 @@ function api(method, path, body) {
     });
   });
 }
-function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; }); }
+function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.admin = !!j.admin; srv.checked = true; return j; }).catch(function () { srv.checked = true; return {}; }); }
 function loginBox(msg) {
   var m = $('#modal');
@@ -1526,8 +1526,10 @@ function saveServer(opts) {
   var photos = {}; draft.teachers.forEach(function (t) { if (draftPhotos[t.id]) photos[t.id] = draftPhotos[t.id]; });
   publishing = true; refreshStatus();
   var btn = $('#aSave'); if (btn) btn.textContent = 'Сақталуда…';
-  return api('PUT', '/api/data', { state: draft, photos: photos, baseRev: D.rev || 0 }).then(function (j) {
-    D = j.state; P = j.photos || {}; draft = clone(D); draftPhotos = Object.assign({}, P); photosDirty = false; publishing = false;
+  var body = { state: draft, photos: photos, baseRev: D.rev || 0 };
+  if (srv.etag !== undefined) body.baseEtag = srv.etag; // which saved version these edits started from
+  return api('PUT', '/api/data', body).then(function (j) {
+    D = j.state; P = j.photos || {}; srv.etag = j.etag; draft = clone(D); draftPhotos = Object.assign({}, P); photosDirty = false; publishing = false;
     if (admin.open) renderAdmin(); renderHeader(); toast('Сақталды — сайт жаңартылды');
     return { ok: true, rev: D.rev };
   }).catch(function (e) {

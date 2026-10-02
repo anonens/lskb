@@ -37,6 +37,7 @@ export function put(pathname, body, opts = {}) {
 async function putNow(pathname, body, opts) {
   needPrivate(opts);
   const m = await meta(pathname);
+  if (opts.ifMatch && opts.allowOverwrite === false) throw new Error('Vercel Blob: ifMatch and allowOverwrite: false are contradictory.');
   if (opts.ifMatch && (!m || m.etag !== opts.ifMatch)) throw new BlobPreconditionFailedError();
   if (m && !opts.ifMatch && !opts.allowOverwrite) throw new Error('Vercel Blob: This blob already exists, use `allowOverwrite: true` if you want to overwrite it.');
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
@@ -47,12 +48,26 @@ async function putNow(pathname, body, opts) {
   return { pathname, url: BASE + pathname, etag };
 }
 
+// Like the real CDN for a compressed response, the content's tag comes back weak (W/"…") — not usable for ifMatch.
 export async function get(pathname, opts = {}) {
   needPrivate(opts);
   const m = await meta(pathname);
   if (!m) return null;
   const buf = await fs.readFile(file(pathname));
-  return { statusCode: 200, stream: new Response(buf).body, headers: new Headers(), blob: { pathname, url: BASE + pathname, etag: m.etag, contentType: m.contentType, size: buf.length } };
+  return { statusCode: 200, stream: new Response(buf).body, headers: new Headers(), blob: { pathname, url: BASE + pathname, etag: 'W/' + m.etag, contentType: m.contentType, size: buf.length } };
+}
+
+export class BlobNotFoundError extends Error {
+  constructor() {
+    super('Vercel Blob: The requested blob does not exist');
+    this.name = 'BlobNotFoundError';
+  }
+}
+export async function head(pathname, opts = {}) {
+  if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN && !opts.storeId && !opts.token) throw new Error('Vercel Blob: No blob credentials found.');
+  const m = await meta(pathname);
+  if (!m) throw new BlobNotFoundError();
+  return { pathname, url: BASE + pathname, etag: m.etag, contentType: m.contentType };
 }
 
 export async function list({ prefix = '', limit = 1000, storeId, token } = {}) {
