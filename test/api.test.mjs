@@ -57,9 +57,10 @@ async function suite(label, port, extra, checkStore) {
     const sess = (await call('GET', '/api/session')).body;
     assert.equal(sess.admin, false);
     assert.equal(sess.configured, true);
-    assert.equal(sess.store, extra.BLOB_STORE_ID ? 'blob' : 'local');
+    const blobMode = Boolean(extra.BLOB_STORE_ID || extra.keribailanys_STORE_ID);
+    assert.equal(sess.store, blobMode ? 'blob' : 'local');
     const chk = (await call('GET', '/api/session?check=1')).body;
-    if (extra.BLOB_STORE_ID) assert.equal(chk.storeOk, true, 'store check'); else assert.equal(chk.storeOk, undefined);
+    if (blobMode) assert.equal(chk.storeOk, true, 'store check'); else assert.equal(chk.storeOk, undefined);
     assert.equal((await call('POST', '/api/session', { body: { password: 'nope' }, headers: origin })).status, 401);
     assert.equal((await call('POST', '/api/session', { body: { password: PASSWORD }, headers: { Origin: 'https://evil.example' } })).status, 403);
     r = await call('POST', '/api/session', { body: { password: PASSWORD }, headers: origin });
@@ -154,6 +155,11 @@ try {
   const blobDir2 = path.join(tmp, 'blob2');
   await suite('password kept as a hash (Blob, faked)', 3903, { ADMIN_PASSWORD: '', ADMIN_PASSWORD_HASH: hash, BLOB_STORE_ID: 'store_fake', JUZ_BLOB_MODULE: pathToFileURL(path.join(ROOT, 'test', 'fake-blob.mjs')).href, FAKE_BLOB_DIR: blobDir2 }, () => {
     assert.ok(fs.readdirSync(blobDir2).map(decodeURIComponent).includes('data/session-key.json'));
+  });
+  // a store connected with a custom "Environment Variable Prefix" (Vercel then adds e.g. keribailanys_STORE_ID)
+  const blobDir3 = path.join(tmp, 'blob3');
+  await suite('Blob store with a custom prefix (keribailanys_STORE_ID)', 3905, { keribailanys_STORE_ID: 'store_fake', JUZ_BLOB_MODULE: pathToFileURL(path.join(ROOT, 'test', 'fake-blob.mjs')).href, FAKE_BLOB_DIR: blobDir3 }, () => {
+    assert.ok(fs.readdirSync(blobDir3).map(decodeURIComponent).includes('data/site.json'));
   });
   // on Vercel without a connected Blob store: the site still shows the seed, the login window explains what is missing
   {

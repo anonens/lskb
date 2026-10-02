@@ -23,6 +23,7 @@ Framework Preset: **Other** (баптаулар `vercel.json` ішінде тұ�
 **3. Деректер қоймасын қосыңыз (Vercel Blob)**
 Жобаның ішінде: **Storage → Create → Blob** → Access: **Private** → Create.
 Жасалған дүкенді осы жобаға **Connect** етіңіз (Production және Preview). Vercel қажетті айнымалыларды өзі қосады.
+«Custom Environment Variable Prefix» өрісін өзгертсеңіз де (мысалы `keribailanys`), сайт оны өзі табады.
 
 **4. Қайта жариялаңыз**
 **Deployments** → соңғы деплойдың **⋯** мәзірі → **Redeploy**. Сонда Blob іске қосылады.

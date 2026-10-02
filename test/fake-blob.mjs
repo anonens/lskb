@@ -22,6 +22,8 @@ async function meta(p) {
 }
 function needPrivate(opts) {
   if (!opts || opts.access !== 'private') throw new Error('Vercel Blob: this store is private, use access: "private".');
+  // like the real SDK: without BLOB_STORE_ID / BLOB_READ_WRITE_TOKEN the store must be named in the call
+  if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN && !opts.storeId && !opts.token) throw new Error('Vercel Blob: No blob credentials found.');
 }
 
 // the real service checks ifMatch atomically; a queue gives the same guarantee here
@@ -53,7 +55,8 @@ export async function get(pathname, opts = {}) {
   return { statusCode: 200, stream: new Response(buf).body, headers: new Headers(), blob: { pathname, url: BASE + pathname, etag: m.etag, contentType: m.contentType, size: buf.length } };
 }
 
-export async function list({ prefix = '', limit = 1000 } = {}) {
+export async function list({ prefix = '', limit = 1000, storeId, token } = {}) {
+  if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN && !storeId && !token) throw new Error('Vercel Blob: No blob credentials found.');
   let names = [];
   try {
     names = await fs.readdir(DIR);
@@ -67,7 +70,8 @@ export async function list({ prefix = '', limit = 1000 } = {}) {
   return { blobs, hasMore: false };
 }
 
-export async function del(urls) {
+export async function del(urls, opts = {}) {
+  if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN && !opts.storeId && !opts.token) throw new Error('Vercel Blob: No blob credentials found.');
   for (const u of [].concat(urls)) {
     const p = String(u).replace(BASE, '');
     await fs.rm(file(p), { force: true });
