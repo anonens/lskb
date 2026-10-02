@@ -425,6 +425,10 @@ function loginBox(msg) {
     '<div class="aRow" style="margin-top:6px"><button class="aBtn" type="button" data-m="0">Бас тарту</button><button class="aBtn primary" type="submit" id="lgBtn">Кіру</button></div></form>';
   m.hidden = false;
   var pw = $('#lgPw'); if (pw) pw.focus();
+  if (!msg) api('GET', '/api/session?check=1').then(function (j) {
+    var el = $('#lgErr');
+    if (el && !el.textContent && j && j.storeOk === false) el.textContent = j.storeMessage || 'Деректер қоймасы (Blob) қосылмаған.';
+  }).catch(function () {});
 }
 document.addEventListener('submit', function (ev) {
   if (!ev.target || ev.target.id !== 'loginForm') return;

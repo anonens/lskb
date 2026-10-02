@@ -54,7 +54,12 @@ async function suite(label, port, extra, checkStore) {
     assert.ok(Object.keys(r.body.state.results).every((w) => pubWeeks.some((x) => x.id === w)), 'no draft results');
 
     // login
-    assert.deepEqual((await call('GET', '/api/session')).body, { admin: false, configured: true });
+    const sess = (await call('GET', '/api/session')).body;
+    assert.equal(sess.admin, false);
+    assert.equal(sess.configured, true);
+    assert.equal(sess.store, extra.BLOB_STORE_ID ? 'blob' : 'local');
+    const chk = (await call('GET', '/api/session?check=1')).body;
+    if (extra.BLOB_STORE_ID) assert.equal(chk.storeOk, true, 'store check'); else assert.equal(chk.storeOk, undefined);
     assert.equal((await call('POST', '/api/session', { body: { password: 'nope' }, headers: origin })).status, 401);
     assert.equal((await call('POST', '/api/session', { body: { password: PASSWORD }, headers: { Origin: 'https://evil.example' } })).status, 403);
     r = await call('POST', '/api/session', { body: { password: PASSWORD }, headers: origin });
@@ -150,6 +155,21 @@ try {
   await suite('password kept as a hash (Blob, faked)', 3903, { ADMIN_PASSWORD: '', ADMIN_PASSWORD_HASH: hash, BLOB_STORE_ID: 'store_fake', JUZ_BLOB_MODULE: pathToFileURL(path.join(ROOT, 'test', 'fake-blob.mjs')).href, FAKE_BLOB_DIR: blobDir2 }, () => {
     assert.ok(fs.readdirSync(blobDir2).map(decodeURIComponent).includes('data/session-key.json'));
   });
+  // on Vercel without a connected Blob store: the site still shows the seed, the login window explains what is missing
+  {
+    const srv = await start(3904, { VERCEL: '1', LOCAL_DATA_DIR: path.join(tmp, 'none') });
+    try {
+      const j = await (await fetch('http://localhost:3904/api/session?check=1')).json();
+      assert.equal(j.store, 'missing');
+      assert.equal(j.storeOk, false);
+      assert.match(j.storeMessage, /Blob/);
+      const d = await (await fetch('http://localhost:3904/api/data')).json();
+      assert.ok(d.state && d.state.teachers.length > 0, 'seed is still shown');
+      console.log('✓ no Blob store connected (as on a fresh Vercel project)');
+    } finally {
+      srv.child.kill();
+    }
+  }
   console.log('All API checks passed.');
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
