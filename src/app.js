@@ -144,12 +144,39 @@ function renderHeader() {
   if (draft && isDirty()) ab.setAttribute('data-dirty', ''); else ab.removeAttribute('data-dirty');
 }
 
-function introHTML(d, k) {
+function introHTML(d, k, hasList) {
   var S = d.subjects[k];
+  var cue = hasList
+    ? '<button class="cue cueBtn" type="button" data-go="roster"><span class="cueText">Мұғалімдер тізімі</span><span class="cueArrow" aria-hidden="true">↓</span></button>'
+    : '<div class="cue"><span class="cueLine"></span><span class="cueText">Төменге жылжыт</span></div>';
   return '<section class="act intro" data-theme="dark" id="top"><div class="pin"><div class="ambient"></div><div class="introRing"></div>' +
     '<div class="zmark" aria-hidden="true"><div class="zglow"></div>' + heroEmblem(k) + '</div>' +
     '<div class="flow"><p class="eyebrow">' + esc(S.eyebrow) + '</p><h1 class="hero">' + esc(S.title) + '</h1>' +
-    '<p class="lede">' + esc(S.lede) + '</p><div class="cue"><span class="cueLine"></span><span class="cueText">Төменге жылжыт</span></div></div></div></section>';
+    '<p class="lede">' + esc(S.lede) + '</p>' + cue + '</div></div></section>';
+}
+// the list of this week's teachers: one tap on a name opens that teacher's panel
+function rosterHTML(d, k, entries, weekLabel) {
+  var S = d.subjects[k], groups = [];
+  entries.forEach(function (e, i) {
+    var line = String(e.a.line || 'SMART').toUpperCase(), g = groups[groups.length - 1];
+    if (!g || g.line !== line) groups.push(g = { line: line, items: [] });
+    g.items.push({ e: e, i: i });
+  });
+  var photos = curPhotos();
+  return '<section class="act roster" id="roster" data-theme="light" data-flow="natural" aria-label="Мұғалімдер тізімі"><div class="pin"><div class="ambient"></div><div class="flow">' +
+    '<p class="rosterEyebrow">' + esc(S.name) + ' · ' + esc(weekLabel) + '</p><h2 class="rosterTitle">Мұғалімдер</h2>' +
+    '<p class="rosterHint">Атыңызды басыңыз — өз нәтижеңізге бірден өтесіз. Тізімге «Тізім» батырмасымен ораласыз.</p>' +
+    groups.map(function (g) {
+      return (groups.length > 1 ? '<p class="rosterGroup"><span>' + esc(g.line) + '</span></p>' : '') + '<div class="rosterGrid">' + g.items.map(function (x) {
+        var e = x.e, photo = photos[e.t.id];
+        return '<button class="rosterItem" type="button" data-go="' + x.i + '">' +
+          '<span class="rosterNum">' + String(x.i + 1).padStart(2, '0') + '</span>' +
+          '<span class="rosterPh">' + (photo ? '<img src="' + esc(photo) + '" alt="" loading="lazy" decoding="async">' : '<b>' + esc(initials(e.t.display)) + '</b>') + '</span>' +
+          '<span class="rosterTxt"><span class="rosterName">' + esc(e.t.display) + '</span><span class="rosterCode">' + esc(e.s ? e.s.code : '') + '</span></span>' +
+          '<span class="rosterGo" aria-hidden="true">→</span></button>';
+      }).join('') + '</div>';
+    }).join('') +
+    '</div></div></section>';
 }
 function isTip(s) { return /^\s*[-–—•→*]/.test(s); }
 function stripTip(s) { return String(s).replace(/^\s*[-–—•→*]\s*/, ''); }
@@ -215,7 +242,8 @@ function renderActs() {
   var d = cur(), k = view.subject;
   var wk = view.weekId ? findWeek(d, view.weekId) : null;
   var entries = wk ? entriesFor(d, view.weekId, k) : [];
-  var html = introHTML(d, k);
+  var html = introHTML(d, k, entries.length > 0);
+  if (entries.length) html += rosterHTML(d, k, entries, wk.label);
   entries.forEach(function (e, i) { html += teacherHTML(d, e, i, wk.label); });
   if (!entries.length) html += emptyHTML(d, k, weeksOf(d).length > 0 && !!wk);
   else html += outroHTML(d, k, entries, entries.length % 2 === 1 ? 'light' : 'dark');
@@ -273,11 +301,30 @@ function update() {
   if (theme !== hdrTheme) { hdrTheme = theme; root.setAttribute('data-hdr', theme); rain.color = null; }
   var nums = $$('#railNums span');
   nums.forEach(function (s, j) { if (j === active) s.setAttribute('data-on', ''); else s.removeAttribute('data-on'); });
-  var dot = $('#railDot'), rn = $('#railNums');
+  var dot = $('#railDot'), rn = $('#railNums'), list = $('#roster'), first = $('.act.teacher[data-idx="0"]');
   if (nums.length && dot) {
-    var target = active >= 0 ? nums[active] : (window.scrollY < vh ? nums[0] : nums[nums.length - 1]);
+    var before = first && first.getBoundingClientRect().top > vh * 0.45;
+    var target = active >= 0 ? nums[active] : (before ? nums[0] : nums[nums.length - 1]);
     dot.style.top = (rn.offsetTop + target.offsetTop + target.offsetHeight / 2 - 4.5) + 'px';
   }
+  var fab = $('#toList'), show = !!list && list.getBoundingClientRect().bottom < vh * 0.35;
+  if (fab && fab.hasAttribute('data-on') !== show) { if (show) fab.setAttribute('data-on', ''); else fab.removeAttribute('data-on'); }
+}
+
+/* one tap to a teacher, one tap back to the list: a short fade hides the jump */
+function goTo(el) {
+  if (!el) return;
+  function to(y) { try { window.scrollTo({ top: y, behavior: 'instant' }); } catch (e) { window.scrollTo(0, y); } }
+  function jump() {
+    to(Math.round(el.getBoundingClientRect().top + window.scrollY)); // measured now: the page may still have been moving
+    update();
+    requestAnimationFrame(function () { var t = el.getBoundingClientRect().top; if (Math.abs(t) > 2) { to(Math.round(t + window.scrollY)); update(); } });
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+    try { el.focus({ preventScroll: true }); } catch (e) {}
+  }
+  if (reduceMotion) { jump(); return; }
+  root.setAttribute('data-jump', '');
+  setTimeout(function () { jump(); requestAnimationFrame(function () { root.removeAttribute('data-jump'); }); }, 170);
 }
 window.addEventListener('scroll', onScroll, { passive: true });
 var resizeT = 0;
@@ -416,6 +463,11 @@ function finale() {
 /* ================= public events ================= */
 document.addEventListener('click', function (ev) {
   var t = ev.target;
+  var go = t.closest && t.closest('#acts [data-go]');
+  if (go) { var g = go.getAttribute('data-go'); goTo(g === 'roster' ? $('#roster') : $('.act.teacher[data-idx="' + g + '"]')); return; }
+  if (t.closest && t.closest('#toList')) { goTo($('#roster')); return; }
+  var rn = t.closest && t.closest('#railNums span');
+  if (rn) { goTo($('.act.teacher[data-idx="' + rn.getAttribute('data-i') + '"]')); return; }
   var sb = t.closest && t.closest('.subjBtn');
   if (sb) {
     var k = sb.getAttribute('data-subj');

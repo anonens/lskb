@@ -205,6 +205,61 @@ button{font:inherit;color:inherit}
 .zghost{fill:color-mix(in oklab,var(--cyan) 17%,transparent);animation:zfloat 12.5s var(--wave) -2.4s infinite}
 .zdepth{fill:var(--zdepth);opacity:.6}
 .zmain{filter:drop-shadow(0 18px 44px color-mix(in oklab,var(--glow) 36%,transparent));animation:zfloat 11s var(--wave) infinite}
+/* the intro's cue is the way into the list of teachers */
+.cueBtn{align-self:flex-start;gap:12px;padding:12px 18px 12px 20px;border-radius:999px;cursor:pointer;font:inherit;text-align:left;
+  background:color-mix(in oklab,var(--ice) 9%,transparent);border:1px solid color-mix(in oklab,var(--ice) 30%,transparent);color:var(--ice);
+  transition:background .24s var(--ease),border-color .24s var(--ease),transform .24s var(--ease)}
+.cueBtn .cueText{font-size:11px;font-weight:600;color:var(--ice)}
+.cueArrow{display:inline-block;font-size:15px;line-height:1;animation:cueBob 2.4s var(--ease) infinite}
+@keyframes cueBob{0%,100%{transform:translateY(-2px)}50%{transform:translateY(3px)}}
+
+/* ---------- list of teachers ---------- */
+.act.roster .pin{min-height:0}
+.act.roster .flow{min-height:0;padding-bottom:clamp(48px,9vh,96px)}
+.rosterEyebrow,.rosterTitle,.rosterHint,.rosterGroup,.rosterGrid{--e:clamp(0,(var(--a) - var(--d,0)) * var(--k,2.6),1);opacity:var(--e);transform:translateY(calc((1 - var(--e)) * 24px))}
+.rosterEyebrow{margin:0 0 10px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:color-mix(in oklab,var(--fgc) 62%,transparent);--d:0;--k:3}
+.rosterTitle{margin:0;font-family:var(--font-display);font-weight:700;font-size:clamp(40px,6.4vw,84px);line-height:.95;letter-spacing:-.045em;text-transform:uppercase;color:var(--fgc);--d:.04}
+.rosterHint{margin:14px 0 clamp(22px,4vh,36px);max-width:56ch;font-size:clamp(14px,1.4vw,16px);line-height:1.6;color:color-mix(in oklab,var(--fgc) 72%,transparent);text-wrap:pretty;--d:.08}
+.rosterGroup{margin:clamp(18px,3vh,28px) 0 10px;--d:.1}
+.rosterGroup span{display:inline-block;padding:5px 13px;border-radius:999px;font-size:10.5px;font-weight:600;letter-spacing:.16em;color:color-mix(in oklab,var(--fgc) 75%,transparent);border:1px dashed color-mix(in oklab,var(--accc) 40%,transparent)}
+.rosterGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;max-width:1180px;--d:.12;--k:2.2}
+.rosterItem{display:grid;grid-template-columns:auto 46px minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;min-height:68px;padding:10px 16px 10px 14px;
+  border-radius:18px;border:1px solid color-mix(in oklab,var(--fgc) 13%,transparent);background:color-mix(in oklab,var(--frost) 42%,transparent);color:var(--fgc);
+  cursor:pointer;text-align:left;font:inherit;box-shadow:0 10px 26px -20px color-mix(in oklab,var(--shade) 60%,transparent);
+  transition:transform .22s var(--ease),background .22s var(--ease),border-color .22s var(--ease),box-shadow .22s var(--ease)}
+@media (hover:hover){
+  .rosterItem:hover{transform:translateY(-2px);background:color-mix(in oklab,var(--frost) 70%,transparent);border-color:color-mix(in oklab,var(--fgc) 26%,transparent);box-shadow:0 16px 32px -18px color-mix(in oklab,var(--shade) 70%,transparent)}
+  .rosterItem:hover .rosterGo{transform:translateX(3px)}
+  .cueBtn:hover{background:color-mix(in oklab,var(--ice) 17%,transparent);border-color:color-mix(in oklab,var(--ice) 55%,transparent);transform:translateY(-1px)}
+  .toList[data-on]:hover{transform:translateY(-2px)}
+}
+.rosterItem:active{transform:scale(.985);background:color-mix(in oklab,var(--frost) 70%,transparent)}
+.roster :focus-visible{outline-color:var(--fgc)}
+.rosterNum{font-family:var(--font-display);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:color-mix(in oklab,var(--fgc) 45%,transparent)}
+.rosterPh{width:46px;height:46px;border-radius:999px;overflow:hidden;display:grid;place-items:center;background:color-mix(in oklab,var(--accc) 14%,transparent);border:1px solid color-mix(in oklab,var(--fgc) 14%,transparent)}
+.rosterPh img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
+.rosterPh b{font-family:var(--font-display);font-size:15px;letter-spacing:-.02em;color:var(--accc)}
+.rosterTxt{display:flex;flex-direction:column;gap:3px;min-width:0}
+.rosterName{font-family:var(--font-display);font-size:17px;font-weight:700;line-height:1.15;letter-spacing:-.02em;text-transform:uppercase;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.rosterCode{font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in oklab,var(--fgc) 58%,transparent)}
+.rosterGo{font-size:18px;line-height:1;color:color-mix(in oklab,var(--accc) 80%,transparent);transition:transform .22s var(--ease)}
+
+/* ---------- "Тізім": back to the list from anywhere ---------- */
+.toList{position:fixed;z-index:25;right:calc(var(--pad) * .55 + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  display:inline-flex;align-items:center;gap:8px;padding:12px 18px 12px 14px;border:0;border-radius:999px;cursor:pointer;
+  font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;background:var(--ink);color:var(--chipfg);
+  box-shadow:0 14px 32px -12px color-mix(in oklab,var(--abyss) 85%,transparent),0 0 0 1px color-mix(in oklab,var(--chipfg) 14%,transparent);
+  opacity:0;transform:translateY(14px) scale(.96);visibility:hidden;
+  transition:opacity .28s var(--ease),transform .28s var(--ease),visibility 0s linear .28s,background .5s var(--ease),color .5s var(--ease)}
+.toList[data-on]{opacity:1;transform:none;visibility:visible;transition-delay:0s}
+.toList svg{width:15px;height:15px;fill:currentColor;flex:none}
+.root:has(.admin:not([hidden])) .toList{display:none}
+
+/* a jump between the list and a teacher: the page fades out and back in */
+#acts{transition:opacity .32s var(--ease)}
+.root[data-jump] #acts{opacity:0;transition-duration:.15s}
+.railNums span{pointer-events:auto;cursor:pointer}
+.railNums span:hover{opacity:.85}
 
 /* ---------- outro ---------- */
 .act.outro .flow{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px}
@@ -390,6 +445,13 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
   .zmark{height:34vh;right:var(--pad);top:120px;opacity:calc(var(--e) * .9)}
   .voteRow{grid-template-columns:70px minmax(0,1fr) 46px;gap:8px}
   .voteLabel{font-size:11px;letter-spacing:.05em}
+  .act.roster .pin{min-height:0}
+  .act.roster .flow{min-height:0;padding-bottom:96px}
+  .rosterGrid{grid-template-columns:1fr;gap:8px}
+  .rosterItem{min-height:62px;padding:8px 14px 8px 12px;gap:11px;grid-template-columns:auto 42px minmax(0,1fr) auto}
+  .rosterPh{width:42px;height:42px}
+  .rosterName{font-size:15.5px}
+  .toList{padding:11px 16px 11px 13px}
 }
 @media (max-width:420px){
   .pill{padding:5px 11px;font-size:10px;letter-spacing:.1em}
