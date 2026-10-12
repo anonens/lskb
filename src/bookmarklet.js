@@ -36,7 +36,8 @@
   var seg = location.pathname.split('/').filter(Boolean);
   var line = seg[1] || 'smart', subjRaw = (seg[2] || '').toLowerCase();
   var subject = /geo/.test(subjRaw) ? 'geometry' : /math/.test(subjRaw) ? 'math' : subjRaw;
-  var pm = /Live Sabaq\s*·\s*(\d+)\s*-\s*АЙ\s*(\d+)\s*-\s*АПТА/.exec(D.body.innerText || '');
+  var periodPattern = /(\d+)\s*[-–—]\s*АЙ\s*(\d+)\s*[-–—]\s*АПТА/i;
+  var pm = periodPattern.exec(D.body.innerText || '');
   if (!pm) {
     show('Апта табылмады. Бет толық жүктелгенін күтіп, қайта басыңыз.', btn('close', 'Жабу'));
     return;
@@ -57,13 +58,15 @@
   var txt = function (e) { return e ? (e.innerText || '').trim() : ''; };
 
   var items = [];
-  var table = Array.prototype.find.call(D.querySelectorAll('table'), function (t) { return vis(t) && Array.prototype.some.call(t.querySelectorAll('thead th'), function (th) { return txt(th) === 'Ұнау %'; }); });
+  var label = function (s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/\s*%$/, ''); };
+  var table = Array.prototype.find.call(D.querySelectorAll('table'), function (t) { return vis(t) && Array.prototype.some.call(t.querySelectorAll('thead th'), function (th) { return label(txt(th)) === 'ұнау'; }); });
   if (table) {
     var ths = Array.prototype.map.call(table.querySelectorAll('thead th'), txt);
-    var col = function (n) { return ths.indexOf(n); };
-    var C = { date: col('Күні'), time: col('Уақыты'), teacher: col('Мұғалім'), potok: col('Поток'), agym: col('Ағым'), like: col('Ұнау %'), att: col('Қатысым %') };
+    var col = function (n) { return ths.map(label).indexOf(label(n)); };
+    var C = { date: col('Күні'), time: col('Уақыты'), teacher: col('Мұғалім'), potok: col('Поток'), agym: col('Ағым'), like: col('Ұнау %'), att: col('Қатысым %'), present: col('Қатысты'), total: col('Жалпы') };
+    if (C.teacher < 0 || C.agym < 0 || C.like < 0) { show('Кесте бағандары өзгерген: Мұғалім, Ағым немесе Ұнау % табылмады. Импорт тоқтатылды.', btn('close', 'Жабу')); return; }
     Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
-      if (tr.children.length < ths.length - 1) { return; }
+      if (!vis(tr) || tr.children.length < ths.length - 1) { return; }
       var cell = function (i) { return i >= 0 ? tr.children[i] : null; };
       var val = function (i) {
         var c = cell(i); if (!c) { return null; }
@@ -71,25 +74,26 @@
         var b = c.querySelector('button[data-cell]'); return txt(b || c);
       };
       var likeCell = cell(C.like);
-      items.push({ num: txt(cell(0)).replace(/[^\d]/g, ''), date: val(C.date), time: val(C.time), teacher: val(C.teacher), potok: val(C.potok), agym: val(C.agym), like: val(C.like), att: val(C.att), likeBtn: likeCell ? likeCell.querySelector('button[data-cell]') : null });
+      items.push({ num: txt(cell(0)).replace(/[^\d]/g, ''), date: val(C.date), time: val(C.time), teacher: val(C.teacher), potok: val(C.potok), agym: val(C.agym), like: val(C.like), att: val(C.att), present: val(C.present), total: val(C.total), likeBtn: likeCell ? likeCell.querySelector('button[data-cell],button') : null });
     });
   } else {
     var fieldEl = function (card, name) {
-      var lab = Array.prototype.find.call(card.querySelectorAll('*'), function (e) { return e.children.length === 0 && (e.textContent || '').trim() === name; });
+      var lab = Array.prototype.find.call(card.querySelectorAll('*'), function (e) { return e.children.length === 0 && label(e.textContent) === label(name); });
       if (!lab) { return null; }
       var c = lab.parentElement;
       for (var i = 0; i < 4 && c; i++) {
         var inp = c.querySelector('input, textarea, select'), b = c.querySelector('button[data-cell]');
         if (inp || b) { return { inp: inp, btn: b }; }
-        var t = (c.innerText || '').replace(name, '').trim(); if (t) { return { txt: t }; }
+        var t = (c.innerText || '').replace(lab.textContent || name, '').trim(); if (t) { return { txt: t }; }
         c = c.parentElement;
       }
       return null;
     };
     var cval = function (card, n) { var f = fieldEl(card, n); if (!f) { return null; } if (f.inp) { return f.inp.value; } if (f.btn) { return txt(f.btn); } return f.txt || null; };
     Array.prototype.forEach.call(D.querySelectorAll('.row-cards > div.rounded-xl'), function (card) {
+      if (!vis(card)) { return; }
       var lf = fieldEl(card, 'Ұнау %');
-      items.push({ num: ((card.innerText || '').match(/№\s*(\d+)/) || [])[1], date: cval(card, 'Күні'), time: cval(card, 'Уақыты'), teacher: cval(card, 'Мұғалім'), potok: cval(card, 'Поток'), agym: cval(card, 'Ағым'), like: cval(card, 'Ұнау %'), att: cval(card, 'Қатысым %'), likeBtn: lf && lf.btn });
+      items.push({ num: ((card.innerText || '').match(/№\s*(\d+)/) || [])[1], date: cval(card, 'Күні'), time: cval(card, 'Уақыты'), teacher: cval(card, 'Мұғалім'), potok: cval(card, 'Поток'), agym: cval(card, 'Ағым'), like: cval(card, 'Ұнау %'), att: cval(card, 'Қатысым %'), present: cval(card, 'Қатысты'), total: cval(card, 'Жалпы'), likeBtn: lf && lf.btn });
     });
   }
   items = items.filter(function (r) { return r.teacher || r.agym; });
@@ -99,6 +103,7 @@
   }
 
   var surveyDlg = function () { return Array.prototype.find.call(D.querySelectorAll('[role=dialog]'), function (d) { return vis(d) && d.querySelector('input[aria-label="Ұнады"]'); }); };
+  if (Array.prototype.some.call(D.querySelectorAll('[role=dialog]'), vis)) { show('Алдымен ашық терезені жабыңыз да, бетбелгіні қайта басыңыз.', btn('close', 'Жабу')); return; }
   var readSurvey = async function (b) {
     b.scrollIntoView({ block: 'center' }); await sleep(120);
     b.click();
@@ -107,9 +112,11 @@
     if (D.activeElement && D.activeElement.blur) { D.activeElement.blur(); }
     var get = function (l) { var i = dlg.querySelector('input[aria-label="' + l + '"]'); return i ? i.value : null; };
     var r = { liked: get('Ұнады'), avg: get('Орташа'), disliked: get('Ұнамады'), total: get('Жалпы'), present: get('Қатысты'), polled: get('Опрос өтті') };
-    var close = Array.prototype.find.call(dlg.querySelectorAll('button'), function (x) { return txt(x) === 'Close' || x.getAttribute('aria-label') === 'Close'; });
+    var close = Array.prototype.find.call(dlg.querySelectorAll('button'), function (x) { return txt(x) === 'Close' || txt(x) === 'Жабу' || x.getAttribute('aria-label') === 'Close' || x.getAttribute('aria-label') === 'Жабу'; });
     if (close) { close.click(); } else { D.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
-    await waitFor(function () { return !surveyDlg(); }, 4000); await sleep(150);
+    var closed = await waitFor(function () { return !surveyDlg(); }, 4000);
+    if (!closed) { r.err = 'dialog did not close'; stop = true; }
+    await sleep(150);
     return r;
   };
 
@@ -119,18 +126,26 @@
       if (stop) { break; }
       show('Оқылып жатыр: <b>' + (i + 1) + ' / ' + items.length + '</b> сабақ…<br><span style="opacity:.7">Бетті жаппаңыз және ештеңе баспаңыз.</span>', btn('stop', 'Тоқтату'));
       var it = items[i];
-      if (it.likeBtn && /\d/.test(it.like || '')) { it.survey = await readSurvey(it.likeBtn); }
+      if (it.likeBtn && !it.likeBtn.disabled && /\d/.test(it.like || '')) {
+        try { it.survey = await readSurvey(it.likeBtn); if (it.survey.err) { stop = true; } } catch (e) { it.survey = { err: 'survey could not be read' }; stop = true; }
+      }
     }
   } finally { W.__juz40busy = false; }
-  if (stop) { if (box.isConnected) { show('Тоқтатылды.', btn('close', 'Жабу')); } return; }
+  if (stop) { if (box.isConnected) { show('Оқу тоқтатылды. Ашық сауалнама терезесін жабыңыз да, бетбелгіні қайта басыңыз.', btn('close', 'Жабу')); } return; }
 
-  var rows = items.map(function (r) { return { num: r.num, date: r.date, time: r.time, teacher: r.teacher, potok: r.potok, agym: r.agym, like: r.like, att: r.att, survey: r.survey || null }; });
-  var payload = { source: 'sapaline', v: 1, subject: subject, line: line, period: period, url: location.href, at: new Date().toISOString(), rows: rows };
+  var after = periodPattern.exec(D.body.innerText || '');
+  if (!after || after[1] !== pm[1] || after[2] !== pm[2]) { show('Оқу кезінде апта өзгерді. Қажетті аптаны таңдап, қайта көшіріңіз.', btn('close', 'Жабу')); return; }
+  var rows = items.map(function (r) { return { num: r.num, date: r.date, time: r.time, teacher: r.teacher, potok: r.potok, agym: r.agym, like: r.like, att: r.att, present: r.present, total: r.total, survey: r.survey || null }; });
+  var payload = { source: 'sapaline', v: 2, subject: subject, line: line, period: period, url: location.href, at: new Date().toISOString(), rows: rows };
   json = JSON.stringify(payload);
   var withS = rows.filter(function (r) { return r.survey && !r.survey.err; }).length;
+  var errors = rows.filter(function (r) { return r.survey && r.survey.err; });
+  var attendance = rows.filter(function (r) { return /\d/.test(r.att || '') || r.survey && /\d/.test(r.survey.present || '') && /\d/.test(r.survey.total || ''); }).length;
   var miss = rows.filter(function (r) { return !(r.survey && !r.survey.err); });
   var subjName = subject === 'geometry' ? 'Геометрия' : subject === 'math' ? 'Математика' : subject;
   show('<b>' + esc(subjName) + ' · ' + esc(period) + '</b><br>' + rows.length + ' сабақ, сауалнамасы бар: <b>' + withS + '</b>' +
+    '<br>Қатысым дерегі бар: <b>' + attendance + '</b>' +
+    (errors.length ? '<br><b>Оқылмаған сауалнама: ' + errors.length + '. Қайта көшіріңіз — импорт бұл деректерді қабылдамайды.</b>' : '') +
     (miss.length ? '<br><span style="opacity:.75">Сауалнамасыз: ' + esc(miss.slice(0, 6).map(function (r) { return r.date + ' ' + r.teacher; }).join('; ')) + (miss.length > 6 ? ' …' : '') + '</span>' : '') +
     '<br><br>«Көшіру» басып, JUZ40 әкімші панеліндегі <b>SapaLine-нан импорттау</b> терезесіне қойыңыз.' +
     '<textarea id="juz40-json" readonly style="display:block;width:100%;box-sizing:border-box;height:72px;margin-top:10px;border-radius:10px;border:1px solid rgba(232,240,255,.25);background:rgba(0,0,0,.25);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:8px">' + esc(json) + '</textarea>',

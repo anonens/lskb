@@ -82,12 +82,20 @@ async function suite(label, port, extra, checkStore) {
     // saving
     const edited = structuredClone(full.state);
     edited.outro.title = 'Тест: ' + label;
+    const metricWeek = Object.keys(edited.results).find(w => pubWeeks.some(x => x.id === w));
+    const metricId = Object.keys(edited.results[metricWeek])[0];
+    Object.assign(edited.results[metricWeek][metricId], { present: 45, total: 60, attendancePct: 75, attendanceLessons: 2, attendanceMode: 'weighted' });
+    edited.teachers.find(t => t.id === 't_kuanysh').display = 'Қуаныш ағай';
     assert.equal((await call('PUT', '/api/data', { body: { state: edited, photos: full.photos, baseRev: rev0 } })).status, 401, 'no cookie');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 }, headers: { Origin: 'https://evil.example' } })).status, 403, 'cross-site');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 + 5 }, headers: origin })).status, 409, 'wrong base');
     r = await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 }, headers: origin });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.state.rev, rev0 + 1);
+    const metric = (await call('GET', '/api/data')).body.state.results[metricWeek][metricId];
+    assert.equal(metric.present, 45); assert.equal(metric.total, 60); assert.equal(metric.attendancePct, 75);
+    assert.equal(metric.attendanceLessons, 2); assert.equal(metric.attendanceMode, 'weighted');
+    assert.equal(r.body.state.teachers.find(t => t.id === 't_kuanysh').display, 'Нұрдәулет ағай');
     assert.equal((await call('GET', '/api/data')).body.state.outro.title, 'Тест: ' + label, 'visitors see the save');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 }, headers: origin })).status, 409, 'stale save refused');
     const pub = (await call('GET', '/api/data')).body;

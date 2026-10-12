@@ -93,7 +93,7 @@ function entriesFor(d, weekId, subject) {
   var res = d.results[weekId] || {};
   return wk.m.assignments.map(function (a, i) {
     return { a: a, i: i, t: byId(d.teachers, a.teacherId), s: byId(d.streams, a.streamId), r: res[a.id] };
-  }).filter(function (e) { return e.a.subject === subject && e.t && pctOf(e.r) != null; })
+  }).filter(function (e) { return e.a.subject === subject && e.t && (pctOf(e.r) != null || attendanceOf(e.r) != null); })
     .sort(function (x, y) { return lineRank(x.a) - lineRank(y.a) || codeOf(x.s).localeCompare(codeOf(y.s), 'kk') || x.i - y.i; });
 }
 function visibleWeeks(d, subject, withDrafts) {
@@ -173,6 +173,7 @@ function rosterHTML(d, k, entries, weekLabel) {
           '<span class="rosterNum">' + String(x.i + 1).padStart(2, '0') + '</span>' +
           '<span class="rosterPh">' + (photo ? '<img src="' + esc(photo) + '" alt="" loading="lazy" decoding="async">' : '<b>' + esc(initials(e.t.display)) + '</b>') + '</span>' +
           '<span class="rosterTxt"><span class="rosterName">' + esc(e.t.display) + '</span><span class="rosterCode">' + esc(e.s ? e.s.code : '') + '</span></span>' +
+          '<span class="rosterMetrics"><span>Ұнату <b>' + (pctOf(e.r) == null ? '—' : fmtPct(pctOf(e.r)) + '%') + '</b></span><span>Қатысым <b>' + (attendanceOf(e.r) == null ? '—' : fmtPct(attendanceOf(e.r)) + '%') + '</b></span></span>' +
           '<span class="rosterGo" aria-hidden="true">→</span></button>';
       }).join('') + '</div>';
     }).join('') +
@@ -185,6 +186,13 @@ function votesHTML(L, A, X, T) {
     return '<div class="voteRow"><span class="voteLabel">' + lab + '</span><span class="voteTrack"><span class="voteBar" data-tone="' + tone + '" style="--w:' + (100 * v / T).toFixed(2) + ';--nz:' + (v > 0 ? 1 : 0) + '"></span></span><span class="voteVal">' + fmtInt(v) + '</span></div>';
   }
   return '<div class="votes">' + row('Ұнады', L, 1) + row('Орташа', A, 2) + row('Ұнамады', X, 3) + '</div>';
+}
+function attendanceHTML(r) {
+  var pct = attendanceOf(r);
+  var detail = r && sapaNumber(r.total) > 0 && sapaNumber(r.present) != null ? fmtInt(r.present) + ' / ' + fmtInt(r.total) + ' қатысым' : r && r.attendanceMode === 'average' ? 'Сабақ пайыздарының орташа мәні' : '';
+  return '<div class="attendance"><span class="attendanceLabel">Қатысым пайызы</span><strong>' + (pct == null ? '—' : fmtPct(pct) + '%') + '</strong>' +
+    '<span class="attendanceDetail">' + esc(pct == null ? 'Дерек әлі енгізілмеген' : detail) + '</span>' +
+    (pct == null ? '' : '<span class="attendanceTrack"><span style="width:' + pct.toFixed(2) + '%"></span></span>') + '</div>';
 }
 function teacherHTML(d, e, i, weekLabel) {
   var theme = i % 2 === 0 ? 'dark' : 'light', side = i % 2 === 0 ? 'right' : 'left', sig = (i % 5) + 1;
@@ -201,8 +209,9 @@ function teacherHTML(d, e, i, weekLabel) {
     '<div class="flow"><div class="row"><div class="textCol">' +
     '<div class="badges"><span class="pill solid">' + esc(d.subjects[e.a.subject].name) + '</span><span class="pill ghost">' + esc(weekLabel) + '</span>' + line + '</div>' +
     '<h2 class="name">' + (e.s ? esc(e.s.code) + ' <i>|</i> ' : '') + esc(e.t.display) + '</h2>' +
-    '<div class="pctRow"><span class="pctNum">' + fmtPct(pct) + '</span><span class="pctSign">%</span><span class="pctCap">ұнату<br>пайызы</span></div>' +
-    '<div class="pctTrack"><div class="pctFill" style="--pct:' + pct.toFixed(2) + '"></div></div>' +
+    '<div class="pctRow"><span class="pctNum">' + fmtPct(pct) + '</span><span class="pctSign">' + (pct == null ? '' : '%') + '</span><span class="pctCap">ұнату<br>пайызы</span></div>' +
+    (pct == null ? '' : '<div class="pctTrack"><div class="pctFill" style="--pct:' + pct.toFixed(2) + '"></div></div>') +
+    attendanceHTML(r) +
     (T ? votesHTML(L, A, X, T) : '') +
     (meta.length ? '<p class="meta">' + meta.join(' · ') + '</p>' : '') +
     (notes.length ? '<ol class="analysis">' + notes.map(function (n) { return '<li' + (isTip(n) ? ' class="tip"' : '') + '>' + esc(stripTip(n)) + '</li>'; }).join('') + '</ol>' : '') +
@@ -213,13 +222,13 @@ function teacherHTML(d, e, i, weekLabel) {
 }
 function outroHTML(d, k, entries, theme) {
   var O = d.outro, S = d.subjects[k];
-  var L = 0, T = 0, sum = 0;
-  entries.forEach(function (e) { var l = num(e.r.liked), t = l + num(e.r.avg) + num(e.r.disliked); L += l; T += t; sum += pctOf(e.r); });
-  var avg = T > 0 ? 100 * L / T : sum / entries.length;
+  var L = 0, T = 0, sum = 0, rated = 0;
+  entries.forEach(function (e) { var l = num(e.r.liked), t = l + num(e.r.avg) + num(e.r.disliked), p = pctOf(e.r); L += l; T += t; if (p != null) { sum += p; rated++; } });
+  var avg = T > 0 ? 100 * L / T : rated ? sum / rated : null;
   var acked = store.get('juz.ack.' + k + '.' + view.weekId);
   return '<section class="act outro" data-theme="' + theme + '"><div class="pin"><div class="ambient"></div><div class="outroRing"></div><div class="flow">' +
     '<p class="outroEyebrow">' + esc(O.eyebrow) + '</p><h2 class="outroTitle">' + esc(O.title) + '</h2><p class="outroText">' + esc(O.text) + '</p>' +
-    '<p class="outroStat"><span>Орташа ұнату <b>' + fmtPct(avg) + '%</b></span><span>Мұғалім <b>' + entries.length + '</b></span>' + (T ? '<span>Жауап <b>' + fmtInt(T) + '</b></span>' : '') + '</p>' +
+    '<p class="outroStat"><span>Орташа ұнату <b>' + fmtPct(avg) + (avg == null ? '' : '%') + '</b></span><span>Мұғалім <b>' + entries.length + '</b></span>' + (T ? '<span>Жауап <b>' + fmtInt(T) + '</b></span>' : '') + '</p>' +
     '<div class="ackWrap" id="ackWrap">' + (acked ? ackMsgHTML(O) : '<button class="ackBtn" type="button" id="ackBtn">' + esc(O.ack) + '</button>') + '</div>' +
     '<div class="footMark"><span class="footDot"></span><span class="footText">JUZ40 · ' + esc(S.footer) + '</span></div>' +
     '</div></div></section>';
@@ -640,13 +649,13 @@ function tabResults() {
     '<label class="aField" style="flex:1 1 240px;max-width:340px"><span>Апта</span><select class="aSel" id="aWeekSel" data-act="pick-week">' +
     ws.slice().reverse().map(function (x) { return opt(x.id, x.label + (x.w.published ? '  · сайтта' : '  · жоба'), x.id === wk.id); }).join('') + '</select></label>' +
     '<label class="aToggle"><input type="checkbox" data-bind="months|' + wk.m.id + '|weeks|' + wk.w.id + '|published"' + (wk.w.published ? ' checked' : '') + '><span>Бұл апта сайтта көрінсін</span></label></div>' +
-    importRow('Ұнады / Орташа / Ұнамады сандарын SapaLine-нан өзі алып, мұғалім-поток бойынша қосады') +
-    '<p class="aHint" style="margin-top:12px">Қолмен толтыру да мүмкін: SapaLine-дағы «Ұнау %» ұяшығын ашқанда шығатын <b>Ұнады / Орташа / Ұнамады</b> сандарын апта бойынша қосып жазыңыз — пайыз өзі есептеледі. Сан болмаса, тек пайызды жазуға болады. Пікірлер: әр жолға бір пікір, «-» белгісімен басталған жол ұсыныс болып көрсетіледі. Нәтижесі жоқ мұғалім сайтта шықпайды.</p></div>';
+    importRow('Ұнату және қатысым деректерін SapaLine-нан алып, мұғалім-поток бойынша қосады') +
+    '<p class="aHint" style="margin-top:12px">Қолмен толтыру да мүмкін: SapaLine-дағы «Ұнау %» ұяшығын ашқанда шығатын <b>Ұнады / Орташа / Ұнамады</b> сандарын апта бойынша қосып жазыңыз — пайыз өзі есептеледі. Сан болмаса, тек пайызды жазуға болады. Қатысым: «Қатысты» және «Жалпы» сандарын немесе пайызын жазыңыз. Пікірлер: әр жолға бір пікір, «-» белгісімен басталған жол ұсыныс болып көрсетіледі. Нәтижесі жоқ мұғалім сайтта шықпайды.</p></div>';
   var body = SUBJ_KEYS.map(function (k) {
     var rows = wk.m.assignments.filter(function (a) { return a.subject === k; });
     var title = '<div class="aSubjHead">' + emblemSVG(k) + esc(d.subjects[k].name) + ' · ' + wk.label + '</div>';
     if (!rows.length) return '<div class="aCard">' + title + '<div class="aEmpty">Бұл айда ' + esc(d.subjects[k].name.toLowerCase()) + ' пәніне мұғалім бекітілмеген. «Кім қайда береді» бөлімінен қосыңыз.</div></div>';
-    return '<div class="aCard">' + title + '<div class="aTableWrap"><table class="aTable"><thead><tr><th>Мұғалім</th><th>Ұнады</th><th>Орташа</th><th>Ұнамады</th><th>Сабақ</th><th>Пайыз</th><th>Пікірлер</th></tr></thead><tbody>' +
+    return '<div class="aCard">' + title + '<div class="aTableWrap"><table class="aTable"><thead><tr><th>Мұғалім</th><th>Ұнады</th><th>Орташа</th><th>Ұнамады</th><th>Сабақ</th><th>Ұнату %</th><th>Қатысты</th><th>Жалпы</th><th>Қатысым %</th><th>Пікірлер</th></tr></thead><tbody>' +
       rows.map(function (a) {
         var t = byId(d.teachers, a.teacherId), s = byId(d.streams, a.streamId), r = res[a.id] || {};
         var base = 'results|' + wk.id + '|' + a.id + '|';
@@ -657,6 +666,9 @@ function tabResults() {
           '<td>' + n('liked') + '</td><td>' + n('avg') + '</td><td>' + n('disliked') + '</td><td>' + n('lessons', '—') + '</td>' +
           '<td><div class="aPct" data-pct="' + wk.id + '|' + a.id + '">' + (p == null ? '—' : fmtPct(p) + '%') + '</div>' +
           '<input class="aIn num" type="text" inputmode="decimal" aria-label="Пайыз қолмен" data-kind="pct" data-bind="' + base + 'pct" data-manual="' + wk.id + '|' + a.id + '" placeholder="% қолмен" style="margin-top:6px;width:96px"' + (hasCounts ? ' hidden' : '') + ' value="' + (r.pct === '' || r.pct == null ? '' : esc(String(r.pct).replace('.', ','))) + '"></td>' +
+          '<td>' + n('present', '—') + '</td><td>' + n('total', '—') + '</td>' +
+          '<td><div class="aPct" data-att="' + wk.id + '|' + a.id + '">' + (attendanceOf(r) == null ? '—' : fmtPct(attendanceOf(r)) + '%') + '</div>' +
+          '<input class="aIn num" type="text" inputmode="decimal" aria-label="Қатысым пайызы қолмен" data-kind="pct" data-bind="' + base + 'attendancePct" data-att-manual="' + wk.id + '|' + a.id + '" placeholder="% қолмен"' + (sapaNumber(r.total) > 0 && sapaNumber(r.present) != null ? ' hidden' : '') + ' value="' + (r.attendancePct == null || r.attendancePct === '' ? '' : esc(String(r.attendancePct).replace('.', ','))) + '"></td>' +
           '<td class="aNotes"><textarea class="aTa" rows="3" data-kind="lines" data-bind="' + base + 'notes" placeholder="Сабақтың күшті тұстары…&#10;- Келесі аптаға ұсыныс">' + esc((r.notes || []).join('\n')) + '</textarea></td></tr>';
       }).join('') + '</tbody></table></div></div>';
   }).join('');
@@ -783,9 +795,12 @@ function onAdminInput(ev) {
   if (parts[0] === 'results') {
     var key = parts[1] + '|' + parts[2];
     var r = (draft.results[parts[1]] || {})[parts[2]] || {};
+    if (['present', 'total', 'attendancePct'].indexOf(parts[3]) >= 0) { delete r.attendanceMode; delete r.attendanceLessons; }
     var p = pctOf(r);
     var cell = $('[data-pct="' + key + '"]'); if (cell) cell.textContent = p == null ? '—' : fmtPct(p) + '%';
     var man = $('[data-manual="' + key + '"]'); if (man) man.hidden = num(r.liked) + num(r.avg) + num(r.disliked) > 0;
+    var ap = attendanceOf(r), attCell = $('[data-att="' + key + '"]'); if (attCell) attCell.textContent = ap == null ? '—' : fmtPct(ap) + '%';
+    var attManual = $('[data-att-manual="' + key + '"]'); if (attManual) attManual.hidden = sapaNumber(r.total) > 0 && sapaNumber(r.present) != null;
     cleanResult(parts[1], parts[2]);
   }
   if (ev.type === 'change' && el.hasAttribute('data-restructure')) renderAdmin();
@@ -795,7 +810,7 @@ function onAdminInput(ev) {
 function cleanResult(weekId, asgId) {
   var wr = draft.results[weekId]; if (!wr || !wr[asgId]) return;
   var r = wr[asgId];
-  var empty = ['liked', 'avg', 'disliked', 'lessons', 'pct'].every(function (f) { return r[f] === '' || r[f] == null; }) && !(r.notes && r.notes.length);
+  var empty = ['liked', 'avg', 'disliked', 'lessons', 'pct', 'present', 'total', 'attendancePct'].every(function (f) { return r[f] === '' || r[f] == null; }) && !(r.notes && r.notes.length);
   if (empty) { delete wr[asgId]; if (!Object.keys(wr).length) delete draft.results[weekId]; }
 }
 function nextLabel(label, suffix, fallback) {
@@ -925,7 +940,7 @@ function importBox() {
   modalResolve = null;
   m.innerHTML = '<div class="modalBox wide" role="dialog" aria-modal="true" aria-labelledby="imT"><h4 id="imT">SapaLine-нан импорттау</h4>' +
     '<ol class="imSteps"><li>SapaLine-да <b>Live Sabaq</b> → Математика немесе Геометрия бетін ашып, керек аптаны таңдаңыз.</li>' +
-    '<li>Бетбелгілер жолағындағы <b>JUZ40 · SapaLine</b> батырмасын басыңыз. Сабақтар оқылып болған соң <b>Көшіру</b> басыңыз.</li>' +
+    '<li>Бетбелгілер жолағындағы <b>JUZ40 · SapaLine</b> батырмасын басыңыз. Сабақтар оқылып болған соң <b>Көшіру</b> басыңыз. Бұрынғы бетбелгіні осы терезедегі жаңа нұсқамен ауыстырыңыз.</li>' +
     '<li>Төмендегі өріске қойып (⌘V / Ctrl+V), <b>Импорттау</b> басыңыз. Сандарды тексеріп, «Сақтау және жариялау» басасыз.</li></ol>' +
     '<div class="imBm"><a class="bmLink" href="' + esc(BOOKMARKLET) + '" title="Бетбелгілер жолағына сүйреп апарыңыз">' + emblemSVG(view.subject) + 'JUZ40 · SapaLine</a>' +
     '<span>Бір рет қана: батырманы браузердің бетбелгілер жолағына сүйреп апарыңыз. Сүйреу болмаса, кодты көшіріп, жаңа бетбелгінің мекенжайына қойыңыз.</span>' +
@@ -939,8 +954,11 @@ function importBox() {
 }
 function importReport(rep) {
   var out = [rep.updated + ' мұғалім-поток жаңарды, ' + rep.lessons + ' сабақтың сауалнамасы қосылды.'];
-  rep.lines.forEach(function (l) { out.push('• ' + (l.code ? l.code + ' | ' : '') + l.name + ' — ' + fmtPct(l.pct) + '% (' + l.lessons + ' сабақ)'); });
+  rep.lines.forEach(function (l) { out.push('• ' + (l.code ? l.code + ' | ' : '') + l.name + ' — ' + (l.pct == null ? 'ұнату дерегі жоқ' : 'ұнату ' + fmtPct(l.pct) + '%') + ' · қатысым ' + (l.attendancePct == null ? '—' : fmtPct(l.attendancePct) + '%') + ' (' + l.lessons + ' сауалнамалы сабақ)'); });
   if (rep.missing.length) out.push('', 'Сауалнамасыз (' + rep.missing.length + '): ' + rep.missing.slice(0, 8).join('; ') + (rep.missing.length > 8 ? ' …' : ''));
+  if (rep.attendanceMissing.length) out.push('', 'Қатысым дерегі жоқ (' + rep.attendanceMissing.length + '): ' + rep.attendanceMissing.slice(0, 8).join('; '));
+  if (rep.retained.length) out.push('', 'Экспортта жоқ ' + rep.retained.length + ' бұрынғы нәтиже сақталды.');
+  if (rep.duplicates) out.push('', 'Қайталанған ' + rep.duplicates + ' жол бір рет есептелді.');
   if (rep.created.length) out.push('', 'Қосылды: ' + rep.created.join('; ') + '.');
   if (rep.added.length) out.push('', 'Жаңа: ' + rep.added.join('; ') + '.');
   out.push('', rep.published ? 'Апта сайтта көрінеді. Тексеріп, «Сақтау және жариялау» басыңыз.' : 'Апта әзірге жоба. Тексеріп, «Сақтау және жариялау» басыңыз.');
@@ -957,7 +975,7 @@ function doImport() {
   var work = clone(draft), rep;
   try { rep = mergeSapa(work, payload, { uid: uid, publish: !!($('#imPub') && $('#imPub').checked) }); }
   catch (e) { say(e && e.code === 'bad_import' ? e.message : 'Импорт сәтсіз аяқталды: деректерді тексеріңіз.'); return; }
-  if (!rep.updated) { say('Бұл аптада сауалнамасы бар сабақ әлі жоқ (' + rep.missing.length + ' сабақ сауалнамасыз). Сауалнама жабылған соң қайталаңыз.'); return; }
+  if (!rep.updated) { say('Бұл аптада ұнату немесе қатысым дерегі бар сабақ табылмады.'); return; }
   draft = work;
   admin.tab = 'results'; admin.weekId = rep.weekId; admin.monthId = rep.monthId;
   if (SUBJ[rep.subject]) view.subject = rep.subject;
@@ -1172,17 +1190,18 @@ function autoMerge(state, items) {
   var list = items.map(function (it) {
     it = it || {};
     var rows = (it.rows || []).map(function (r) {
+      if (r && !Array.isArray(r) && typeof r === 'object') return r;
       r = r || [];
-      return { date: r[0], time: r[1], teacher: r[2], agym: r[3], survey: r[4] == null ? null : { liked: r[4], avg: r[5], disliked: r[6] } };
+      return { date: r[0], time: r[1], teacher: r[2], agym: r[3], present: r[7], total: r[8], att: r[9], survey: r[4] == null ? null : { liked: r[4], avg: r[5], disliked: r[6] } };
     });
     var withSurvey = rows.filter(function (r) { return r.survey && (+r.survey.liked || 0) + (+r.survey.avg || 0) + (+r.survey.disliked || 0) > 0; }).length;
     var wk = weekOf(it.period);
-    return { it: it, rows: rows, withSurvey: withSurvey, key: pkey(it.period), week: wk, hadNumbers: !!(wk && state.results[wk.id] && Object.keys(state.results[wk.id]).length) };
+    return { it: it, rows: rows, withSurvey: withSurvey, hasMetrics: withSurvey > 0 || rows.some(function (r) { return attendanceOf({ present: r.present != null ? r.present : r.survey && r.survey.present, total: r.total != null ? r.total : r.survey && r.survey.total, attendancePct: r.att != null ? r.att : r.attendancePct }) != null; }), key: pkey(it.period), week: wk, hadNumbers: !!(wk && state.results[wk.id] && Object.keys(state.results[wk.id]).length) };
   });
-  var newest = list.reduce(function (a, x) { return x.withSurvey ? Math.max(a, x.key) : a; }, -1);
+  var newest = list.reduce(function (a, x) { return x.hasMetrics ? Math.max(a, x.key) : a; }, -1);
   list.forEach(function (x) {
     var it = x.it, line = String(it.line || 'smart').toUpperCase();
-    if (!x.withSurvey) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'no lesson with a survey yet', rows: x.rows.length }); return; }
+    if (!x.hasMetrics) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'no lesson with feedback or attendance yet', rows: x.rows.length }); return; }
     if (x.key < newest && !x.week) { reports.push({ subject: it.subject, line: line, period: it.period, skipped: 'an older week that is not on the site', rows: x.rows.length }); return; }
     var publish = x.key === newest && (!x.week || !x.hadNumbers), wasOn = !!(x.week && x.week.published);
     var rep = mergeSapa(state, { subject: it.subject, line: line, period: it.period, rows: x.rows }, { uid: uid, publish: publish });
@@ -1195,7 +1214,7 @@ function autoMerge(state, items) {
     var T = got.liked + got.avg + got.disliked;
     reports.push({ subject: rep.subject, line: line, period: rep.period, lessons: rep.lessons, overall: fmtPct(T ? 100 * got.liked / T : null) + '%',
       week: rep.published ? (wasOn ? 'already on the site' : 'switched on now') : 'kept hidden (switched off in the admin panel)',
-      teachers: rep.lines.map(function (l) { return l.name + ' · ' + l.code + ': ' + fmtPct(l.pct) + '% (' + l.lessons + ' сабақ)'; }),
+      teachers: rep.lines.map(function (l) { return l.name + ' · ' + l.code + ': ' + (l.pct == null ? 'ұнату дерегі жоқ' : 'ұнату ' + fmtPct(l.pct) + '%') + ' · қатысым ' + (l.attendancePct == null ? '—' : fmtPct(l.attendancePct) + '%') + ' (' + l.lessons + ' сауалнамалы сабақ)'; }),
       noSurvey: rep.missing, added: rep.added, created: rep.created });
   });
   return { reports: reports, problems: problems };
