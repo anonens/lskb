@@ -940,12 +940,13 @@ function importBox() {
   modalResolve = null;
   m.innerHTML = '<div class="modalBox wide" role="dialog" aria-modal="true" aria-labelledby="imT"><h4 id="imT">SapaLine-нан импорттау</h4>' +
     '<ol class="imSteps"><li>SapaLine-да <b>Live Sabaq</b> → Математика немесе Геометрия бетін ашып, керек аптаны таңдаңыз.</li>' +
-    '<li>Бетбелгілер жолағындағы <b>JUZ40 · SapaLine</b> батырмасын басыңыз. Сабақтар оқылып болған соң <b>Көшіру</b> басыңыз. Бұрынғы бетбелгіні осы терезедегі жаңа нұсқамен ауыстырыңыз.</li>' +
-    '<li>Төмендегі өріске қойып (⌘V / Ctrl+V), <b>Импорттау</b> басыңыз. Сандарды тексеріп, «Сақтау және жариялау» басасыз.</li></ol>' +
+    '<li>Бетбелгілер жолағындағы <b>JUZ40 · SapaLine</b> батырмасын басыңыз. Сабақтар оқылып болған соң <b>Көшіру</b> немесе <b>JSON жүктеу</b> басыңыз. Бұрынғы бетбелгіні осы терезедегі жаңа нұсқамен ауыстырыңыз.</li>' +
+    '<li>Төмендегі өріске қойып (⌘V / Ctrl+V) немесе жүктелген JSON файлды ашып, <b>Импорттау</b> басыңыз. Сандарды тексеріп, «Сақтау және жариялау» басасыз.</li></ol>' +
     '<div class="imBm"><a class="bmLink" href="' + esc(BOOKMARKLET) + '" title="Бетбелгілер жолағына сүйреп апарыңыз">' + emblemSVG(view.subject) + 'JUZ40 · SapaLine</a>' +
     '<span>Бір рет қана: батырманы браузердің бетбелгілер жолағына сүйреп апарыңыз. Сүйреу болмаса, кодты көшіріп, жаңа бетбелгінің мекенжайына қойыңыз.</span>' +
     '<button class="aBtn icon" type="button" data-imp="copybm">Кодты көшіру</button></div>' +
     '<label class="aField"><span>SapaLine-нан көшірілген деректер</span><textarea class="aTa" id="imText" rows="4" spellcheck="false" autocomplete="off" placeholder="Осында қойыңыз"></textarea></label>' +
+    '<label class="aField"><span>Немесе Sapaline-нан жүктелген JSON файлды ашыңыз</span><input class="aIn" type="file" id="imFile" accept=".json,application/json" data-import-file aria-label="JSON файлды ашу"></label>' +
     '<p class="imErr" id="imErr" role="alert"></p>' +
     '<label class="aToggle"><input type="checkbox" id="imPub" checked><span>Импорттан кейін апта сайтта көрінсін</span></label>' +
     '<div class="aRow" style="margin-top:18px"><button class="aBtn" type="button" data-m="0">Бас тарту</button><button class="aBtn primary" type="button" data-imp="go">Импорттау</button></div></div>';
@@ -983,8 +984,28 @@ function doImport() {
   renderAdmin(); renderHeader(); $('#admin').scrollTop = 0;
   confirmBox((cur().subjects[rep.subject] || {}).name + ' · ' + rep.period, importReport(rep), null);
 }
+function readImportFile(file) {
+  if (!file) return Promise.reject(new Error('Файл таңдалмаған.'));
+  if (file.size > 2000000) return Promise.reject(new Error('JSON файл тым үлкен (ең көбі 2 МБ).'));
+  return file.text().then(function (text) {
+    var payload;
+    try { payload = JSON.parse(text); } catch (e) { throw new Error('Бұл файлда жарамды JSON жоқ. Sapaline-нан қайта жүктеңіз.'); }
+    if (!payload || !Array.isArray(payload.rows)) throw new Error('Бұл Sapaline экспортына ұқсамайды: сабақтар тізімі жоқ.');
+    return text;
+  });
+}
 function onAdminChange(ev) {
   var t = ev.target;
+  if (t.matches && t.matches('input[type=file][data-import-file]')) {
+    var file = t.files && t.files[0], ta = $('#imText'), err = $('#imErr');
+    if (!file) return;
+    readImportFile(file).then(function (text) {
+      if (!ta || !ta.isConnected) return;
+      ta.value = text; if (err) err.textContent = '';
+      toast('Файл ашылды. «Импорттау» басыңыз.');
+    }).catch(function (e) { if (err) err.textContent = e.message; });
+    return;
+  }
   if (t.matches && t.matches('[data-act="pick-week"]')) { admin.weekId = t.value; var wk = findWeek(draft, t.value); if (wk) admin.monthId = wk.m.id; renderAdmin(); return; }
   if (t.matches && t.matches('[data-act="pick-month"]')) { admin.monthId = t.value; renderAdmin(); return; }
   if (t.matches && t.matches('input[type=file][data-photo]')) {
@@ -1026,6 +1047,7 @@ var adminEl = $('#admin');
 adminEl.addEventListener('click', onAdminClick);
 adminEl.addEventListener('input', function (ev) { if (ev.target.matches && ev.target.matches('select, input[type=file], input[type=checkbox]')) return; onAdminInput(ev); });
 adminEl.addEventListener('change', onAdminChange);
+$('#modal').addEventListener('change', onAdminChange);
 document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Escape' && !$('#modal').hidden) { closeModal(false); return; }
   if (ev.key === 'Escape' && admin.open) closeAdmin();

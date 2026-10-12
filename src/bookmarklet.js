@@ -10,24 +10,57 @@
   var BOX = 'juz40-sapa-box';
   var old = D.getElementById(BOX); if (old) { old.remove(); }
   var box = D.createElement('div'); box.id = BOX;
-  box.setAttribute('style', 'position:fixed;z-index:2147483647;top:16px;right:16px;width:380px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;background:#0d1a52;color:#e8f0ff;font:14px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:16px;text-align:left');
+  box.setAttribute('style', 'position:fixed;z-index:2147483647;top:16px;right:16px;width:380px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;background:#0d1a52;color:#e8f0ff;font:14px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:16px;text-align:left;pointer-events:auto!important;isolation:isolate');
   D.body.appendChild(box);
   var stop = false, json = '';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
-  var btn = function (x, label, main) { return '<button type="button" data-x="' + x + '" style="cursor:pointer;border:0;border-radius:999px;padding:9px 15px;margin:12px 8px 0 0;font-family:inherit;font-size:13px;font-weight:700;' + (main ? 'background:#93c2ff;color:#0d1a52' : 'background:rgba(232,240,255,.12);color:#e8f0ff') + '">' + label + '</button>'; };
+  var btn = function (x, label, main) { return '<button type="button" data-x="' + x + '" style="pointer-events:auto!important;cursor:pointer;border:0;border-radius:999px;padding:9px 15px;margin:12px 8px 0 0;font-family:inherit;font-size:13px;font-weight:700;' + (main ? 'background:#93c2ff;color:#0d1a52' : 'background:rgba(232,240,255,.12);color:#e8f0ff') + '">' + label + '</button>'; };
   var show = function (html, buttons) { box.innerHTML = '<div style="font-weight:800;letter-spacing:.03em;margin-bottom:8px">JUZ40 · SapaLine</div><div>' + html + '</div><div>' + (buttons || '') + '</div>'; };
-  var done = function (b) { if (b) { b.textContent = 'Көшірілді ✓'; } };
+  var notice = function (text) { var el = box.querySelector('[data-copy-status]'); if (el) { el.textContent = text; } };
+  var selectJSON = function () {
+    var ta = box.querySelector('#juz40-json');
+    if (!ta) { return false; }
+    try { ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length); return true; } catch (e) { return false; }
+  };
+  var done = function (b) { if (b) { b.textContent = 'Көшірілді ✓'; } notice('Деректер көшірілді. Импорт терезесіне қойыңыз.'); };
+  // Keep the panel interactive when the host page has a modal/focus layer, and keep its
+  // delegated React handlers from treating our controls as page controls.
+  ['pointerdown', 'mousedown', 'keydown'].forEach(function (type) { box.addEventListener(type, function (ev) { ev.stopPropagation(); }, true); });
   box.addEventListener('click', function (ev) {
+    ev.stopPropagation();
     var b = ev.target.closest ? ev.target.closest('[data-x]') : null; if (!b) { return; }
+    ev.preventDefault();
     var x = b.getAttribute('data-x');
     if (x === 'close') { stop = true; box.remove(); return; }
     if (x === 'stop') { stop = true; return; }
-    if (x === 'copy') {
-      var ta = D.getElementById('juz40-json');
-      var fallback = function () { try { ta.focus(); ta.select(); if (D.execCommand('copy')) { done(b); } } catch (e) {} };
-      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(json).then(function () { done(b); }, fallback); } else { fallback(); }
+    if (x === 'select') { selectJSON(); notice('Мәтін белгіленді. ⌘C / Ctrl+C басып, импорт терезесіне қойыңыз.'); return; }
+    if (x === 'download') {
+      var url = null, link = null;
+      try {
+        url = URL.createObjectURL(new Blob([json], { type: 'application/json;charset=utf-8' }));
+        link = D.createElement('a'); link.href = url; link.download = 'sapaline-' + subject + '-' + line + '-m' + pm[1] + '-w' + pm[2] + '.json';
+        D.body.appendChild(link); link.click();
+        notice('JSON жүктелді. Сайттағы импорт терезесінде «JSON файлды ашу» таңдаңыз.');
+      } catch (e) { notice('Файл жүктелмеді. «Мәтінді белгілеу» басып, ⌘C / Ctrl+C арқылы көшіріңіз.'); }
+      finally { if (link) { link.remove(); } if (url) { setTimeout(function () { URL.revokeObjectURL(url); }, 60000); } }
+      return;
     }
-  });
+    if (x === 'copy') {
+      // Legacy copy runs synchronously inside the click so it does not lose user activation.
+      var copied = false;
+      try { copied = selectJSON() && typeof D.execCommand === 'function' && D.execCommand('copy'); } catch (e) {}
+      if (copied) { done(b); return; }
+      var failed = function () {
+        b.textContent = 'Қайта көшіру'; selectJSON();
+        notice('Браузер автоматты көшіруге рұқсат бермеді. Белгіленген мәтінді ⌘C / Ctrl+C арқылы көшіріңіз немесе «JSON жүктеу» басыңыз.');
+      };
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          notice('Көшіріліп жатыр…'); Promise.resolve(navigator.clipboard.writeText(json)).then(function () { done(b); }, failed);
+        } else { failed(); }
+      } catch (e) { failed(); }
+    }
+  }, true);
 
   if (!/(^|\.)sapaline\.app$/.test(location.hostname) || !/^\/live-sabaq\//.test(location.pathname)) {
     show('Бұл батырма SapaLine-дағы <b>Live Sabaq</b> бетінде жұмыс істейді. Математика немесе Геометрия бетін ашып, аптаны таңдап, қайта басыңыз.', btn('close', 'Жабу'));
@@ -147,7 +180,8 @@
     '<br>Қатысым дерегі бар: <b>' + attendance + '</b>' +
     (errors.length ? '<br><b>Оқылмаған сауалнама: ' + errors.length + '. Қайта көшіріңіз — импорт бұл деректерді қабылдамайды.</b>' : '') +
     (miss.length ? '<br><span style="opacity:.75">Сауалнамасыз: ' + esc(miss.slice(0, 6).map(function (r) { return r.date + ' ' + r.teacher; }).join('; ')) + (miss.length > 6 ? ' …' : '') + '</span>' : '') +
-    '<br><br>«Көшіру» басып, JUZ40 әкімші панеліндегі <b>SapaLine-нан импорттау</b> терезесіне қойыңыз.' +
-    '<textarea id="juz40-json" readonly style="display:block;width:100%;box-sizing:border-box;height:72px;margin-top:10px;border-radius:10px;border:1px solid rgba(232,240,255,.25);background:rgba(0,0,0,.25);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:8px">' + esc(json) + '</textarea>',
-    btn('copy', 'Көшіру', true) + btn('close', 'Жабу'));
+    '<br><br>«Көшіру» басыңыз немесе JSON файлын жүктеп, JUZ40 әкімші панеліндегі <b>SapaLine-нан импорттау</b> терезесіне қойыңыз немесе файлды ашыңыз.' +
+    '<textarea id="juz40-json" readonly style="display:block;width:100%;box-sizing:border-box;height:72px;margin-top:10px;border-radius:10px;border:1px solid rgba(232,240,255,.25);background:rgba(0,0,0,.25);color:#e8f0ff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:8px;pointer-events:auto!important;user-select:text!important">' + esc(json) + '</textarea>',
+    '<p data-copy-status role="status" aria-live="polite" style="font-size:12px;line-height:1.5;margin:10px 0 0"></p>' +
+    btn('copy', 'Көшіру', true) + btn('select', 'Мәтінді белгілеу') + btn('download', 'JSON жүктеу') + btn('close', 'Жабу'));
 })();
