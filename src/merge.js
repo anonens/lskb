@@ -47,46 +47,56 @@ function mergeSapa(state, payload, opts) {
   if (monN < 1 || monN > 120 || weekN < 1 || weekN > 12) fail('Ай немесе апта нөмірі дұрыс емес.');
   var period = monN + '-АЙ ' + weekN + '-АПТА';
   var lineName = String(payload.line || 'smart').trim().toUpperCase() || 'SMART';
-  var report = { subject: subject, period: period, created: [], added: [], missing: [], attendanceMissing: [], retained: [], lines: [], lessons: 0, updated: 0, duplicates: 0 };
+  var report = { subject: subject, period: period, created: [], added: [], missing: [], attendanceMissing: [], retained: [], warnings: [], lines: [], lessons: 0, updated: 0, duplicates: 0 };
+  function warn(msg) { report.warnings.push(msg); }
 
 
-  // Validate the complete export before creating anything. An unreadable survey is not a zero.
+  // Check the complete export before creating anything. Something the copy itself got wrong (an unread
+  // survey) stops the import, because copying again fixes it; an unread survey is not a zero.
+  // Odd numbers in SapaLine itself (more present than enrolled, a row without a teacher, a negative count,
+  // the same lesson twice with different numbers) cannot be fixed by copying again: the import goes on
+  // without that number and lists it under «Ескертпелер».
   var seen = Object.create(null), usable = [];
   payload.rows.forEach(function (r, index) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) fail('Сабақ жолы дұрыс емес: ' + (index + 1));
     var name = String(r.teacher || '').replace(/\s+/g, ' ').trim();
     var code = String(r.agym || '').replace(/\s+/g, ' ').trim();
     var label = [r.date, r.time, name || '?'].filter(Boolean).join(' ');
-    if (!name || !code) fail('Мұғалім немесе ағым жоқ: ' + label);
-    var survey = r.survey, counts = null;
+    if (!name || !code) { warn('Мұғалімі немесе ағымы жазылмаған сабақ есепке алынбады: ' + label); return; }
+    var survey = r.survey, counts = null, badLike = false, badAtt = false;
     if (survey && survey.err || !survey && sapaNumber(r.like, true) != null) fail('Сауалнама оқылмаған: ' + label + '. SapaLine-нан қайта көшіріңіз.');
     if (survey) {
       counts = {};
       ['liked', 'avg', 'disliked'].forEach(function (k) {
         var n = sapaNumber(survey[k]);
-        if (n == null) fail('Сауалнама саны дұрыс емес (' + k + '): ' + label);
-        counts[k] = n;
+        if (n == null && counts) { counts = null; badLike = true; warn('Сауалнама саны дұрыс емес (' + ({ liked: 'Ұнады', avg: 'Орташа', disliked: 'Ұнамады' })[k] + ': «' + survey[k] + '»): ' + label + ' — бұл сабақтың ұнатуы есепке алынбады'); }
+        if (counts) counts[k] = n;
       });
-      if (counts.liked + counts.avg + counts.disliked === 0) counts = null;
+      if (counts && counts.liked + counts.avg + counts.disliked === 0) counts = null;
     }
     var present = sapaNumber(r.present), total = sapaNumber(r.total);
     if (present == null) present = sapaNumber(survey && survey.present);
     if (total == null) total = sapaNumber(survey && survey.total);
-    if (present != null && total != null && present > total) fail('Қатысты саны жалпы саннан артық: ' + label);
+    var att;
+    if (present != null && total != null && present > total) {
+      warn('Қатысты саны (' + present + ') жалпы саннан (' + total + ') артық: ' + label + ' — бұл сабақтың қатысымы есепке алынбады' + (counts ? ', ұнатуы саналды' : ''));
+      present = total = null; att = null; badAtt = true;
+    }
     var weighted = present != null && total > 0;
-    var att = weighted ? 100 * present / total : sapaNumber(r.att != null ? r.att : r.attendancePct, true);
+    if (!badAtt) att = weighted ? 100 * present / total : sapaNumber(r.att != null ? r.att : r.attendancePct, true);
     var key = r.num != null && String(r.num).trim() !== '' ? 'num:' + r.num : r.date && r.time ? [r.date, r.time, norm(name), norm(code), norm(r.potok)].join('|') : null;
     var signature = JSON.stringify([name, code, r.date, r.time, counts, present, total, att]);
     if (key && seen[key]) {
-      if (seen[key] !== signature) fail('Бір сабақтың екі түрлі жолы бар: ' + label);
-      report.duplicates += 1; return;
+      if (seen[key] !== signature) warn('Бір сабақтың екі түрлі жолы бар, біріншісі алынды: ' + label);
+      else report.duplicates += 1;
+      return;
     }
     if (key) seen[key] = signature;
-    if (!counts) report.missing.push(label);
-    if (att == null) report.attendanceMissing.push(label);
+    if (!counts && !badLike) report.missing.push(label);
+    if (att == null && !badAtt) report.attendanceMissing.push(label);
     if (counts || att != null) usable.push({ row: r, name: name, code: code, counts: counts, present: present, total: total, weighted: weighted, att: att });
   });
-  if (!usable.length) fail('Ұнату немесе қатысым деректері бар сабақ табылмады.');
+  if (!usable.length) fail('Ұнату немесе қатысым деректері бар сабақ табылмады.' + (report.warnings.length ? ' ' + report.warnings.join('; ') : ''));
 
   // month + week
   var month = find(state.months, function (m) { return norm(m.label) === norm(monN + '-АЙ'); });

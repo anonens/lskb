@@ -956,6 +956,7 @@ function importBox() {
 function importReport(rep) {
   var out = [rep.updated + ' мұғалім-поток жаңарды, ' + rep.lessons + ' сабақтың сауалнамасы қосылды.'];
   rep.lines.forEach(function (l) { out.push('• ' + (l.code ? l.code + ' | ' : '') + l.name + ' — ' + (l.pct == null ? 'ұнату дерегі жоқ' : 'ұнату ' + fmtPct(l.pct) + '%') + ' · қатысым ' + (l.attendancePct == null ? '—' : fmtPct(l.attendancePct) + '%') + ' (' + l.lessons + ' сауалнамалы сабақ)'); });
+  if (rep.warnings && rep.warnings.length) out.push('', 'Ескертпелер (' + rep.warnings.length + ') — есеп тоқтамады, бірақ SapaLine-дағы мына жолдарды тексеріңіз:', rep.warnings.slice(0, 10).map(function (w) { return '• ' + w; }).join('\n') + (rep.warnings.length > 10 ? '\n… тағы ' + (rep.warnings.length - 10) : ''));
   if (rep.missing.length) out.push('', 'Сауалнамасыз (' + rep.missing.length + '): ' + rep.missing.slice(0, 8).join('; ') + (rep.missing.length > 8 ? ' …' : ''));
   if (rep.attendanceMissing.length) out.push('', 'Қатысым дерегі жоқ (' + rep.attendanceMissing.length + '): ' + rep.attendanceMissing.slice(0, 8).join('; '));
   if (rep.retained.length) out.push('', 'Экспортта жоқ ' + rep.retained.length + ' бұрынғы нәтиже сақталды.');
@@ -1237,7 +1238,7 @@ function autoMerge(state, items) {
     reports.push({ subject: rep.subject, line: line, period: rep.period, lessons: rep.lessons, overall: fmtPct(T ? 100 * got.liked / T : null) + '%',
       week: rep.published ? (wasOn ? 'already on the site' : 'switched on now') : 'kept hidden (switched off in the admin panel)',
       teachers: rep.lines.map(function (l) { return l.name + ' · ' + l.code + ': ' + (l.pct == null ? 'ұнату дерегі жоқ' : 'ұнату ' + fmtPct(l.pct) + '%') + ' · қатысым ' + (l.attendancePct == null ? '—' : fmtPct(l.attendancePct) + '%') + ' (' + l.lessons + ' сауалнамалы сабақ)'; }),
-      noSurvey: rep.missing, added: rep.added, created: rep.created });
+      noSurvey: rep.missing, warnings: rep.warnings, added: rep.added, created: rep.created });
   });
   return { reports: reports, problems: problems };
 }

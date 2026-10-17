@@ -47,12 +47,32 @@ st = state(); rep = merge(st, [row({ teacher: 'Нұрдәулет Қуаныш' 
 const junior = ctx.mergeSapa(st, { ...payload([row()]), line: 'junior' });
 assert.equal(Object.keys(st.results[rep.weekId]).length, 2);
 assert.equal(junior.updated, 1);
-// Broken/empty exports are rejected atomically, preserving existing results and weeks.
-for (const rows of [[], [row({ survey: { err: 'no dialog' } })], [row({ survey: null, like: '80%' })], [row({ survey: { liked: '-2', avg: 1, disliked: 0 } })], [row({ agym: '' })], [row({ survey: { liked: 8, avg: 1, disliked: 1, present: 101, total: 100 } })], [row(), row({ survey: { liked: 9, avg: 0, disliked: 0 } })]]) {
+// A broken copy (empty, an unread survey) is rejected atomically, preserving existing results and weeks.
+for (const rows of [[], [row({ survey: { err: 'no dialog' } })], [row({ survey: null, like: '80%' })], [row({ agym: '' })]]) {
   st = state(); const before = JSON.stringify(st);
   assert.throws(() => merge(st, rows), e => e.code === 'bad_import');
   assert.equal(JSON.stringify(st), before);
 }
+// Odd numbers in SapaLine itself become warnings; the rest is still counted.
+st = state(); rep = merge(st, [row({ survey: { liked: 8, avg: 1, disliked: 1, present: 101, total: 100 } }), row({ num: '2', time: '11:00', survey: { liked: 3, avg: 2, disliked: 0, present: 10, total: 20 } })]); r = result(st, rep);
+assert.equal(rep.warnings.length, 1); assert.match(rep.warnings[0], /^Қатысты саны \(101\) жалпы саннан \(100\) артық: 12\.10\.2026 10:00 Қуаныш Нұрдәулет — .*ұнатуы саналды$/);
+assert.equal(r.liked, 11, 'likes of that lesson still count'); assert.equal(r.lessons, 2);
+assert.equal(r.present, 10); assert.equal(r.total, 20); assert.equal(ctx.attendanceOf(r), 50, 'attendance without that lesson');
+assert.equal(rep.attendanceMissing.length, 0, 'listed once, as a warning');
+st = state(); rep = merge(st, [row({ survey: { liked: 8, avg: 1, disliked: 1, present: 101, total: 100 } })]); r = result(st, rep);
+assert.equal(r.liked, 8); assert.equal(ctx.attendanceOf(r), null); assert.equal(rep.warnings.length, 1);
+st = state(); rep = merge(st, [row({ survey: { liked: '-2', avg: 1, disliked: 0, present: 80, total: 100 } })]); r = result(st, rep);
+assert.match(rep.warnings[0], /Сауалнама саны дұрыс емес \(Ұнады: «-2»\)/); assert.equal(r.liked, undefined); assert.equal(ctx.attendanceOf(r), 80);
+assert.equal(rep.missing.length, 0);
+st = state(); rep = merge(st, [row({ agym: '' }), row({ num: '2', time: '11:00' })]); r = result(st, rep);
+assert.match(rep.warnings[0], /^Мұғалімі немесе ағымы жазылмаған сабақ есепке алынбады: 12\.10\.2026 10:00/); assert.equal(r.liked, 8); assert.equal(r.lessons, 1);
+st = state(); rep = merge(st, [row(), row({ survey: { liked: 9, avg: 0, disliked: 0 } })]); r = result(st, rep);
+assert.match(rep.warnings[0], /^Бір сабақтың екі түрлі жолы бар, біріншісі алынды/); assert.equal(r.liked, 8); assert.equal(rep.duplicates, 0);
+st = state(); rep = merge(st, [row()]); assert.deepEqual([...rep.warnings], [], 'a clean export has no warnings');
+// More present than enrolled, typed in the admin panel, is saved as typed.
+st = state(); rep = merge(st, [row()]);
+Object.assign(result(st, rep), { present: 105, total: 100, attendancePct: 95 });
+assert.equal(validateState(st).results[rep.weekId][Object.keys(st.results[rep.weekId])[0]].present, 105);
 st = state(); rep = merge(st, [row()]);
 const saved = validateState(st), stored = saved.results[rep.weekId][Object.keys(st.results[rep.weekId])[0]];
 assert.equal(stored.present, 80); assert.equal(stored.total, 100); assert.equal(stored.attendancePct, 80);
