@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs && node scripts/dev-server.mjs",
-    "test": "node scripts/build.mjs && node test/import.test.mjs && node test/bookmarklet.test.mjs && node test/api.test.mjs"
+    "test": "node scripts/build.mjs && node test/import.test.mjs && node test/bookmarklet.test.mjs && node test/api.test.mjs && node test/sapaline.test.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0"
