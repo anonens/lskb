@@ -6,19 +6,25 @@
    the page then shows like% = liked / (liked + avg + disliked).
    A missing month / week / teacher / stream / assignment is created (a new month copies the last
    month's "who teaches where" list). Notes the admin already wrote for that week are kept. */
+// Attendance may pass 100%: students who skipped their own stream sometimes join the last one, so a
+// stream can count more attendees than it had enrolled. Such a value is kept, not rejected; this is the
+// generous upper guard that only blocks plainly corrupt numbers.
+var ATT_MAX_PCT = 100000;
 // Shared by the importer and public/admin views. Missing values stay missing (zero is valid).
-function sapaNumber(v, percent) {
+// percent: parse a percentage; maxPct caps it (100 by default, higher for attendance).
+function sapaNumber(v, percent, maxPct) {
   if (v == null || String(v).trim() === '' || /^[—–-]$/.test(String(v).trim())) return null;
   var text = String(v).trim().replace(/\s/g, '').replace(percent ? /%$/ : /$^/, '').replace(',', '.');
   if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
   var n = Number(text);
-  return Number.isFinite(n) && n >= 0 && (percent ? n <= 100 : Number.isInteger(n) && n <= 10000000) ? n : null;
+  return Number.isFinite(n) && n >= 0 && (percent ? n <= (maxPct || 100) : Number.isInteger(n) && n <= 10000000) ? n : null;
 }
 function attendanceOf(r) {
   if (!r) return null;
   var present = sapaNumber(r.present), total = sapaNumber(r.total);
-  if (present != null && total > 0 && present <= total) return 100 * present / total;
-  return sapaNumber(r.attendancePct, true);
+  // more present than enrolled is kept: the percentage then goes over 100%
+  if (present != null && total > 0) return 100 * present / total;
+  return sapaNumber(r.attendancePct, true, ATT_MAX_PCT);
 }
 function mergeSapa(state, payload, opts) {
   opts = opts || {};
@@ -78,12 +84,11 @@ function mergeSapa(state, payload, opts) {
     if (present == null) present = sapaNumber(survey && survey.present);
     if (total == null) total = sapaNumber(survey && survey.total);
     var att;
-    if (present != null && total != null && present > total) {
-      warn('Қатысты саны (' + present + ') жалпы саннан (' + total + ') артық: ' + label + ' — бұл сабақтың қатысымы есепке алынбады' + (counts ? ', ұнатуы саналды' : ''));
-      present = total = null; att = null; badAtt = true;
-    }
     var weighted = present != null && total > 0;
-    if (!badAtt) att = weighted ? 100 * present / total : sapaNumber(r.att != null ? r.att : r.attendancePct, true);
+    // More attendees than enrolled is accepted (students who skipped earlier streams join the last one):
+    // the lesson is counted as is and its percentage goes over 100%, only flagged so the admin can see it.
+    if (weighted && present > total) warn('Қатысты саны (' + present + ') жалпы саннан (' + total + ') көп (' + Math.round(100 * present / total) + '%): ' + label + ' — басқа потоктан қосылған оқушылар болуы мүмкін, сол күйінде есептелді');
+    if (!badAtt) att = weighted ? 100 * present / total : sapaNumber(r.att != null ? r.att : r.attendancePct, true, ATT_MAX_PCT);
     var key = r.num != null && String(r.num).trim() !== '' ? 'num:' + r.num : r.date && r.time ? [r.date, r.time, norm(name), norm(code), norm(r.potok)].join('|') : null;
     var signature = JSON.stringify([name, code, r.date, r.time, counts, present, total, att]);
     if (key && seen[key]) {
