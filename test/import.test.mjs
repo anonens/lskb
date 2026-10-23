@@ -54,13 +54,15 @@ for (const rows of [[], [row({ survey: { err: 'no dialog' } })], [row({ survey: 
   assert.equal(JSON.stringify(st), before);
 }
 // Odd numbers in SapaLine itself become warnings; the rest is still counted.
+// More attendees than enrolled (students who join the last stream) is accepted, counted, and flagged —
+// the stream's attendance then goes over 100% instead of being dropped.
 st = state(); rep = merge(st, [row({ survey: { liked: 8, avg: 1, disliked: 1, present: 101, total: 100 } }), row({ num: '2', time: '11:00', survey: { liked: 3, avg: 2, disliked: 0, present: 10, total: 20 } })]); r = result(st, rep);
-assert.equal(rep.warnings.length, 1); assert.match(rep.warnings[0], /^Қатысты саны \(101\) жалпы саннан \(100\) артық: 12\.10\.2026 10:00 Қуаныш Нұрдәулет — .*ұнатуы саналды$/);
+assert.equal(rep.warnings.length, 1); assert.match(rep.warnings[0], /^Қатысты саны \(101\) жалпы саннан \(100\) көп \(101%\): 12\.10\.2026 10:00 Қуаныш Нұрдәулет — .*сол күйінде есептелді$/);
 assert.equal(r.liked, 11, 'likes of that lesson still count'); assert.equal(r.lessons, 2);
-assert.equal(r.present, 10); assert.equal(r.total, 20); assert.equal(ctx.attendanceOf(r), 50, 'attendance without that lesson');
-assert.equal(rep.attendanceMissing.length, 0, 'listed once, as a warning');
+assert.equal(r.present, 111); assert.equal(r.total, 120); assert.equal(ctx.attendanceOf(r), 92.5, 'over-attendance is summed in, not dropped');
+assert.equal(rep.attendanceMissing.length, 0);
 st = state(); rep = merge(st, [row({ survey: { liked: 8, avg: 1, disliked: 1, present: 101, total: 100 } })]); r = result(st, rep);
-assert.equal(r.liked, 8); assert.equal(ctx.attendanceOf(r), null); assert.equal(rep.warnings.length, 1);
+assert.equal(r.liked, 8); assert.equal(ctx.attendanceOf(r), 101, 'a lone over-100 lesson shows above 100%'); assert.equal(rep.warnings.length, 1);
 st = state(); rep = merge(st, [row({ survey: { liked: '-2', avg: 1, disliked: 0, present: 80, total: 100 } })]); r = result(st, rep);
 assert.match(rep.warnings[0], /Сауалнама саны дұрыс емес \(Ұнады: «-2»\)/); assert.equal(r.liked, undefined); assert.equal(ctx.attendanceOf(r), 80);
 assert.equal(rep.missing.length, 0);
@@ -69,10 +71,11 @@ assert.match(rep.warnings[0], /^Мұғалімі немесе ағымы жаз�
 st = state(); rep = merge(st, [row(), row({ survey: { liked: 9, avg: 0, disliked: 0 } })]); r = result(st, rep);
 assert.match(rep.warnings[0], /^Бір сабақтың екі түрлі жолы бар, біріншісі алынды/); assert.equal(r.liked, 8); assert.equal(rep.duplicates, 0);
 st = state(); rep = merge(st, [row()]); assert.deepEqual([...rep.warnings], [], 'a clean export has no warnings');
-// More present than enrolled, typed in the admin panel, is saved as typed.
+// More present than enrolled, typed in the admin panel, is saved as typed — the percentage may pass 100.
 st = state(); rep = merge(st, [row()]);
-Object.assign(result(st, rep), { present: 105, total: 100, attendancePct: 95 });
-assert.equal(validateState(st).results[rep.weekId][Object.keys(st.results[rep.weekId])[0]].present, 105);
+Object.assign(result(st, rep), { present: 105, total: 100, attendancePct: 150 });
+const over = validateState(st).results[rep.weekId][Object.keys(st.results[rep.weekId])[0]];
+assert.equal(over.present, 105); assert.equal(over.attendancePct, 150, 'attendance over 100% is kept, not clamped to 100');
 st = state(); rep = merge(st, [row()]);
 const saved = validateState(st), stored = saved.results[rep.weekId][Object.keys(st.results[rep.weekId])[0]];
 assert.equal(stored.present, 80); assert.equal(stored.total, 100); assert.equal(stored.attendancePct, 80);

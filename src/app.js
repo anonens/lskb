@@ -668,7 +668,7 @@ function tabResults() {
           '<input class="aIn num" type="text" inputmode="decimal" aria-label="Пайыз қолмен" data-kind="pct" data-bind="' + base + 'pct" data-manual="' + wk.id + '|' + a.id + '" placeholder="% қолмен" style="margin-top:6px;width:96px"' + (hasCounts ? ' hidden' : '') + ' value="' + (r.pct === '' || r.pct == null ? '' : esc(String(r.pct).replace('.', ','))) + '"></td>' +
           '<td>' + n('present', '—') + '</td><td>' + n('total', '—') + '</td>' +
           '<td><div class="aPct" data-att="' + wk.id + '|' + a.id + '">' + (attendanceOf(r) == null ? '—' : fmtPct(attendanceOf(r)) + '%') + '</div>' +
-          '<input class="aIn num" type="text" inputmode="decimal" aria-label="Қатысым пайызы қолмен" data-kind="pct" data-bind="' + base + 'attendancePct" data-att-manual="' + wk.id + '|' + a.id + '" placeholder="% қолмен"' + (sapaNumber(r.total) > 0 && sapaNumber(r.present) != null ? ' hidden' : '') + ' value="' + (r.attendancePct == null || r.attendancePct === '' ? '' : esc(String(r.attendancePct).replace('.', ','))) + '"></td>' +
+          '<input class="aIn num" type="text" inputmode="decimal" aria-label="Қатысым пайызы қолмен" data-kind="apct" data-bind="' + base + 'attendancePct" data-att-manual="' + wk.id + '|' + a.id + '" placeholder="% қолмен"' + (sapaNumber(r.total) > 0 && sapaNumber(r.present) != null ? ' hidden' : '') + ' value="' + (r.attendancePct == null || r.attendancePct === '' ? '' : esc(String(r.attendancePct).replace('.', ','))) + '"></td>' +
           '<td class="aNotes"><textarea class="aTa" rows="3" data-kind="lines" data-bind="' + base + 'notes" placeholder="Сабақтың күшті тұстары…&#10;- Келесі аптаға ұсыныс">' + esc((r.notes || []).join('\n')) + '</textarea></td></tr>';
       }).join('') + '</tbody></table></div></div>';
   }).join('');
@@ -784,6 +784,7 @@ function readInput(el) {
   var v = el.value;
   if (kind === 'int') { v = v.replace(/[^\d]/g, ''); return v === '' ? '' : parseInt(v, 10); }
   if (kind === 'pct') { v = v.replace(',', '.').replace(/[^\d.]/g, ''); return v === '' || isNaN(+v) ? '' : clamp(+v, 0, 100); }
+  if (kind === 'apct') { v = v.replace(',', '.').replace(/[^\d.]/g, ''); return v === '' || isNaN(+v) ? '' : clamp(+v, 0, ATT_MAX_PCT); }
   if (kind === 'lines') return v.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
   return v;
 }
