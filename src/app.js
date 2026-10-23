@@ -939,6 +939,8 @@ function importBox() {
   var m = $('#modal');
   modalResolve = null;
   m.innerHTML = '<div class="modalBox wide" role="dialog" aria-modal="true" aria-labelledby="imT"><h4 id="imT">SapaLine-нан импорттау</h4>' +
+    (SERVER ? directSapaBlock() : '') +
+    (SERVER ? '<div class="imOr"><span>немесе қолмен (бетбелгі)</span></div>' : '') +
     '<ol class="imSteps"><li>SapaLine-да <b>Live Sabaq</b> → Математика немесе Геометрия бетін ашып, керек аптаны таңдаңыз.</li>' +
     '<li>Бетбелгілер жолағындағы <b>JUZ40 · SapaLine</b> батырмасын басыңыз. Сабақтар оқылып болған соң <b>Көшіру</b> немесе <b>JSON жүктеу</b> басыңыз. Бұрынғы бетбелгіні осы терезедегі жаңа нұсқамен ауыстырыңыз.</li>' +
     '<li>Төмендегі өріске қойып (⌘V / Ctrl+V) немесе жүктелген JSON файлды ашып, <b>Импорттау</b> басыңыз. Сандарды тексеріп, «Сақтау және жариялау» басасыз.</li></ol>' +
@@ -951,7 +953,71 @@ function importBox() {
     '<label class="aToggle"><input type="checkbox" id="imPub" checked><span>Импорттан кейін апта сайтта көрінсін</span></label>' +
     '<div class="aRow" style="margin-top:18px"><button class="aBtn" type="button" data-m="0">Бас тарту</button><button class="aBtn primary" type="button" data-imp="go">Импорттау</button></div></div>';
   m.hidden = false;
-  var ta = $('#imText'); if (ta) ta.focus();
+  if (SERVER) sapaDirectInit();
+  else { var ta = $('#imText'); if (ta) ta.focus(); }
+}
+
+/* ===== SapaLine direct fetch (service account via /api/sapaline) ===== */
+var sapaLines = null; // { smart:[{month,week,label}], junior:[...] } once loaded from the server
+function directSapaBlock() {
+  return '<div class="imDirect" id="imDirect">' +
+    '<div class="imDirectHead"><b>SapaLine-дан тікелей алу</b><span>Сервистік аккаунтпен — бетбелгісіз</span></div>' +
+    '<div class="imDirectRow">' +
+    '<label class="aField"><span>Пән</span><select class="aIn" id="sdSubject"><option value="math">Математика</option><option value="geo">Геометрия</option></select></label>' +
+    '<label class="aField"><span>Желі</span><select class="aIn" id="sdLine"><option value="smart">SMART</option><option value="junior">JUNIOR</option></select></label>' +
+    '<label class="aField"><span>Апта</span><select class="aIn" id="sdWeek" disabled><option>Жүктелуде…</option></select></label>' +
+    '</div>' +
+    '<p class="imErr" id="sdErr" role="alert"></p>' +
+    '<div class="aRow"><button class="aBtn primary" type="button" data-imp="fetch" id="sdGo" disabled>Алу және импорттау</button></div>' +
+    '</div>';
+}
+function sapaFillWeeks() {
+  var lineEl = $('#sdLine'), weekEl = $('#sdWeek');
+  if (!lineEl || !weekEl || !sapaLines) return;
+  var list = sapaLines[lineEl.value] || [];
+  if (!list.length) { weekEl.innerHTML = '<option value="">апта жоқ</option>'; weekEl.disabled = true; return; }
+  weekEl.innerHTML = list.map(function (p, i) { return '<option value="' + p.month + '.' + p.week + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('');
+  weekEl.disabled = false;
+}
+function sapaDirectInit() {
+  var subj = $('#sdSubject'); if (subj && SUBJ[view.subject]) subj.value = view.subject;
+  var err = $('#sdErr'), go = $('#sdGo');
+  api('GET', '/api/sapaline').then(function (j) {
+    if (!$('#imDirect')) return; // window closed meanwhile
+    if (!j.configured) {
+      var d = $('#imDirect');
+      if (d) d.innerHTML = '<div class="imDirectHead"><b>SapaLine-дан тікелей алу</b></div>' +
+        '<p class="aHint" style="margin:8px 0 0">Бұл әлі қосылмаған. Vercel → <b>Settings → Environment Variables</b> бөлімінде <b>SAPALINE_EMAIL</b> және <b>SAPALINE_PASSWORD</b> (сервистік аккаунт) қосып, <b>Redeploy</b> жасаңыз. Содан кейін осы жерден бір рет басып жаңартасыз.</p>';
+      return;
+    }
+    sapaLines = j.lines || {};
+    sapaFillWeeks();
+    if (go) go.disabled = false;
+  }).catch(function (e) {
+    if (e && e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріңіз.'); return; }
+    if (err) err.textContent = (e && e.message) || 'SapaLine тізімі жүктелмеді.';
+    var w = $('#sdWeek'); if (w) { w.innerHTML = '<option value="">—</option>'; w.disabled = true; }
+  });
+}
+function sapaDirectFetch() {
+  var subjEl = $('#sdSubject'), lineEl = $('#sdLine'), weekEl = $('#sdWeek'), err = $('#sdErr'), go = $('#sdGo');
+  var say = function (msg) { if (err) err.textContent = msg; };
+  if (!subjEl || !lineEl || !weekEl) return;
+  say('');
+  var mw = String(weekEl.value || '').split('.');
+  var body = { subject: subjEl.value, line: lineEl.value };
+  if (mw.length === 2 && mw[0] && mw[1]) { body.month = Number(mw[0]); body.week = Number(mw[1]); }
+  if (go) { go.disabled = true; go.textContent = 'Алынуда…'; }
+  api('POST', '/api/sapaline', body).then(function (payload) {
+    var ta = $('#imText');
+    if (ta) ta.value = JSON.stringify(payload);
+    doImport();
+  }).catch(function (e) {
+    if (e && e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріңіз.'); return; }
+    say((e && e.message) || 'SapaLine-дан алу сәтсіз аяқталды.');
+  }).then(function () {
+    if (go && go.isConnected) { go.disabled = false; go.textContent = 'Алу және импорттау'; }
+  });
 }
 function importReport(rep) {
   var out = [rep.updated + ' мұғалім-поток жаңарды, ' + rep.lessons + ' сабақтың сауалнамасы қосылды.'];
@@ -1072,12 +1138,17 @@ $('#modal').addEventListener('click', function (ev) {
   if (t.closest && t.closest('.bmLink')) { ev.preventDefault(); toast('Бұл батырманы бетбелгілер жолағына сүйреп апарыңыз — ол SapaLine бетінде басылады'); return; }
   var imp = t.closest && t.closest('[data-imp]');
   if (imp) {
-    if (imp.getAttribute('data-imp') === 'go') doImport();
+    var act = imp.getAttribute('data-imp');
+    if (act === 'go') doImport();
+    else if (act === 'fetch') sapaDirectFetch();
     else copyText(BOOKMARKLET).then(function () { toast('Код көшірілді: жаңа бетбелгі жасап, мекенжай өрісіне қойыңыз'); }, function () { toast('Көшіру мүмкін болмады. Батырманы сүйреп апарыңыз.', 'bad'); });
     return;
   }
   var b = t.closest && t.closest('[data-m]');
   if (b) closeModal(b.getAttribute('data-m') === '1'); else if (t === $('#modal')) closeModal(false);
+});
+$('#modal').addEventListener('change', function (ev) {
+  if (ev.target && ev.target.id === 'sdLine') sapaFillWeeks();
 });
 var toastT = 0;
 function toast(msg, tone) {
