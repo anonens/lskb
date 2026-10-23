@@ -959,28 +959,44 @@ function importBox() {
 
 /* ===== SapaLine direct fetch (service account via /api/sapaline) ===== */
 var sapaLines = null; // { smart:[{month,week,label}], junior:[...] } once loaded from the server
+var SD_SUBJECTS = [['math', 'Математика'], ['geo', 'Геометрия']];
+var SD_LINES = [['smart', 'SMART'], ['junior', 'JUNIOR']];
 function directSapaBlock() {
+  var opts = function (list) { return '<option value="all">Барлығы</option>' + list.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join(''); };
   return '<div class="imDirect" id="imDirect">' +
     '<div class="imDirectHead"><b>SapaLine-дан тікелей алу</b><span>Сервистік аккаунтпен — бетбелгісіз</span></div>' +
     '<div class="imDirectRow">' +
-    '<label class="aField"><span>Пән</span><select class="aIn" id="sdSubject"><option value="math">Математика</option><option value="geo">Геометрия</option></select></label>' +
-    '<label class="aField"><span>Желі</span><select class="aIn" id="sdLine"><option value="smart">SMART</option><option value="junior">JUNIOR</option></select></label>' +
+    '<label class="aField"><span>Пән</span><select class="aIn" id="sdSubject">' + opts(SD_SUBJECTS) + '</select></label>' +
+    '<label class="aField"><span>Желі</span><select class="aIn" id="sdLine">' + opts(SD_LINES) + '</select></label>' +
     '<label class="aField"><span>Апта</span><select class="aIn" id="sdWeek" disabled><option>Жүктелуде…</option></select></label>' +
     '</div>' +
     '<p class="imErr" id="sdErr" role="alert"></p>' +
     '<div class="aRow"><button class="aBtn primary" type="button" data-imp="fetch" id="sdGo" disabled>Алу және импорттау</button></div>' +
     '</div>';
 }
+// Weeks SapaLine has for the chosen line; "Барлығы" shows the union across lines.
+function sapaWeeksForLine(line) {
+  if (!sapaLines) return [];
+  var lines = line === 'all' ? SD_LINES.map(function (x) { return x[0]; }) : [line];
+  var byKey = {}, out = [];
+  lines.forEach(function (ln) {
+    (sapaLines[ln] || []).forEach(function (p) {
+      var k = p.month + '.' + p.week;
+      if (!byKey[k]) { byKey[k] = 1; out.push({ month: p.month, week: p.week, label: p.label }); }
+    });
+  });
+  return out.sort(function (a, b) { return b.month * 100 + b.week - (a.month * 100 + a.week); });
+}
 function sapaFillWeeks() {
   var lineEl = $('#sdLine'), weekEl = $('#sdWeek');
   if (!lineEl || !weekEl || !sapaLines) return;
-  var list = sapaLines[lineEl.value] || [];
+  var keep = weekEl.value, list = sapaWeeksForLine(lineEl.value);
   if (!list.length) { weekEl.innerHTML = '<option value="">апта жоқ</option>'; weekEl.disabled = true; return; }
-  weekEl.innerHTML = list.map(function (p, i) { return '<option value="' + p.month + '.' + p.week + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('');
+  var has = list.some(function (p) { return p.month + '.' + p.week === keep; });
+  weekEl.innerHTML = list.map(function (p) { var v = p.month + '.' + p.week; return '<option value="' + v + '"' + (v === keep || (!has && p === list[0]) ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('');
   weekEl.disabled = false;
 }
 function sapaDirectInit() {
-  var subj = $('#sdSubject'); if (subj && SUBJ[view.subject]) subj.value = view.subject;
   var err = $('#sdErr'), go = $('#sdGo');
   api('GET', '/api/sapaline').then(function (j) {
     if (!$('#imDirect')) return; // window closed meanwhile
@@ -999,25 +1015,72 @@ function sapaDirectInit() {
     var w = $('#sdWeek'); if (w) { w.innerHTML = '<option value="">—</option>'; w.disabled = true; }
   });
 }
+// Pulls every chosen subject × line for the selected week (all by default), merges them into one draft,
+// and shows a single report. "Барлығы" skips the combinations SapaLine has no week for.
 function sapaDirectFetch() {
   var subjEl = $('#sdSubject'), lineEl = $('#sdLine'), weekEl = $('#sdWeek'), err = $('#sdErr'), go = $('#sdGo');
   var say = function (msg) { if (err) err.textContent = msg; };
   if (!subjEl || !lineEl || !weekEl) return;
   say('');
   var mw = String(weekEl.value || '').split('.');
-  var body = { subject: subjEl.value, line: lineEl.value };
-  if (mw.length === 2 && mw[0] && mw[1]) { body.month = Number(mw[0]); body.week = Number(mw[1]); }
-  if (go) { go.disabled = true; go.textContent = 'Алынуда…'; }
-  api('POST', '/api/sapaline', body).then(function (payload) {
-    var ta = $('#imText');
-    if (ta) ta.value = JSON.stringify(payload);
-    doImport();
-  }).catch(function (e) {
-    if (e && e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріңіз.'); return; }
-    say((e && e.message) || 'SapaLine-дан алу сәтсіз аяқталды.');
-  }).then(function () {
-    if (go && go.isConnected) { go.disabled = false; go.textContent = 'Алу және импорттау'; }
+  if (mw.length !== 2 || !mw[0] || !mw[1]) { say('Алдымен апта таңдаңыз.'); return; }
+  var month = Number(mw[0]), week = Number(mw[1]);
+  var subjects = subjEl.value === 'all' ? SD_SUBJECTS.map(function (x) { return x[0]; }) : [subjEl.value];
+  var lines = lineEl.value === 'all' ? SD_LINES.map(function (x) { return x[0]; }) : [lineEl.value];
+  var combos = [];
+  subjects.forEach(function (s) {
+    lines.forEach(function (l) {
+      if ((sapaLines[l] || []).some(function (p) { return p.month === month && p.week === week; })) combos.push({ subject: s, line: l });
+    });
   });
+  if (!combos.length) { say('Бұл аптада SapaLine-да дерек жоқ.'); return; }
+  var publish = !!($('#imPub') && $('#imPub').checked);
+  ensureDraft();
+  var work = clone(draft), reports = [], problems = [], last = null;
+  if (go) { go.disabled = true; go.textContent = 'Алынуда…'; }
+  var nameOf = function (c) { return ((SUBJ[c.subject] && cur().subjects[c.subject] || {}).name || c.subject) + ' · ' + c.line.toUpperCase(); };
+  var step = function (i) {
+    if (i >= combos.length) return finish();
+    var c = combos[i];
+    if (go) go.textContent = 'Алынуда… (' + (i + 1) + '/' + combos.length + ')';
+    return api('POST', '/api/sapaline', { subject: c.subject, line: c.line, month: month, week: week }).then(function (payload) {
+      try {
+        var rep = mergeSapa(work, payload, { uid: uid, publish: publish });
+        if (rep.updated) { rep._name = nameOf(c); reports.push(rep); last = rep; }
+        else problems.push(nameOf(c) + ': ұнату/қатысым дерегі бар сабақ жоқ');
+      } catch (e) { problems.push(nameOf(c) + ': ' + (e && e.code === 'bad_import' ? e.message : 'импорт қатесі')); }
+    }).catch(function (e) {
+      if (e && e.status === 401) { loginBox('Сессия аяқталды. Қайта кіріңіз.'); throw e; }
+      problems.push(nameOf(c) + ': ' + ((e && e.message) || 'алу сәтсіз'));
+    }).then(function () { return step(i + 1); });
+  };
+  var finish = function () {
+    if (go && go.isConnected) { go.disabled = false; go.textContent = 'Алу және импорттау'; }
+    if (!reports.length) { say(problems.join('; ') || 'Дерек табылмады.'); return; }
+    draft = work;
+    admin.tab = 'results'; admin.weekId = last.weekId; admin.monthId = last.monthId;
+    if (SUBJ[last.subject]) view.subject = last.subject;
+    closeModal(false);
+    renderAdmin(); renderHeader(); $('#admin').scrollTop = 0;
+    confirmBox('SapaLine · ' + last.period, multiImportReport(reports, problems, publish), null);
+  };
+  step(0).catch(function () { if (go && go.isConnected) { go.disabled = false; go.textContent = 'Алу және импорттау'; } });
+}
+function multiImportReport(reports, problems, publish) {
+  if (reports.length === 1) return importReport(reports[0]);
+  var lessons = reports.reduce(function (n, r) { return n + r.lessons; }, 0);
+  var updated = reports.reduce(function (n, r) { return n + r.updated; }, 0);
+  var warns = reports.reduce(function (n, r) { return n + (r.warnings ? r.warnings.length : 0); }, 0);
+  var out = [reports.length + ' импорт сәтті: ' + updated + ' мұғалім-поток, ' + lessons + ' сабақ.'];
+  reports.forEach(function (r) {
+    var lineTxt = '• ' + r._name + ' — ' + r.updated + ' поток, ' + r.lessons + ' сабақ';
+    if (r.warnings && r.warnings.length) lineTxt += ' ⚠ ' + r.warnings.length + ' ескертпе';
+    out.push(lineTxt);
+  });
+  if (warns) out.push('', 'Барлығы ' + warns + ' ескертпе — әр аптаны нәтижелерден тексеріңіз.');
+  if (problems.length) out.push('', 'Алынбады (' + problems.length + '):', problems.map(function (p) { return '• ' + p; }).join('\n'));
+  out.push('', publish ? 'Апталар сайтта көрінеді. Тексеріп, «Сақтау және жариялау» басыңыз.' : 'Апталар әзірге жоба. Тексеріп, «Сақтау және жариялау» басыңыз.');
+  return out.join('\n');
 }
 function importReport(rep) {
   var out = [rep.updated + ' мұғалім-поток жаңарды, ' + rep.lessons + ' сабақтың сауалнамасы қосылды.'];
