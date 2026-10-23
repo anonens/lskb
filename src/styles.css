@@ -389,7 +389,7 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 
 /* ---------- modal + toast ---------- */
 .modal{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:16px;background:color-mix(in oklab,var(--abyss) 70%,transparent)}
-.modalBox{width:min(440px,100%);background:var(--deep);border:1px solid color-mix(in oklab,var(--ice) 16%,transparent);border-radius:18px;padding:20px;box-shadow:0 30px 80px -30px var(--abyss);color:var(--ice)}
+.modalBox{width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--deep);border:1px solid color-mix(in oklab,var(--ice) 16%,transparent);border-radius:18px;padding:20px;box-shadow:0 30px 80px -30px var(--abyss);color:var(--ice)}
 .modalBox h4{margin:0 0 8px;font-size:18px;font-family:var(--font-display);letter-spacing:-.01em}
 .modalBox p{margin:0 0 16px;font-size:14px;line-height:1.55;color:color-mix(in oklab,var(--ice) 75%,transparent);white-space:pre-line}
 .modalBox>svg{display:block;color:var(--ice)}

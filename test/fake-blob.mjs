@@ -43,9 +43,16 @@ async function putNow(pathname, body, opts) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
   await fs.mkdir(DIR, { recursive: true });
   const etag = '"' + crypto.randomBytes(8).toString('hex') + '"';
-  await fs.writeFile(file(pathname), buf);
-  await fs.writeFile(file(pathname) + '.meta', JSON.stringify({ etag, contentType: opts.contentType || 'application/octet-stream' }));
+  // Write then rename so a concurrent get() never reads a half-written file (the real service is atomic).
+  await writeAtomic(file(pathname), buf);
+  await writeAtomic(file(pathname) + '.meta', JSON.stringify({ etag, contentType: opts.contentType || 'application/octet-stream' }));
   return { pathname, url: BASE + pathname, etag };
+}
+
+async function writeAtomic(dest, data) {
+  const tmp = dest + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
+  await fs.writeFile(tmp, data);
+  await fs.rename(tmp, dest);
 }
 
 // Like the real CDN for a compressed response, the content's tag comes back weak (W/"…") — not usable for ifMatch.
@@ -77,7 +84,7 @@ export async function list({ prefix = '', limit = 1000, storeId, token } = {}) {
     names = await fs.readdir(DIR);
   } catch {}
   const blobs = names
-    .filter((n) => !n.endsWith('.meta'))
+    .filter((n) => !n.endsWith('.meta') && !n.endsWith('.tmp'))
     .map((n) => decodeURIComponent(n))
     .filter((p) => p.startsWith(prefix))
     .slice(0, limit)
