@@ -51,7 +51,7 @@ function fakeSapaline() {
 }
 
 async function start(port, extra) {
-  const env = { ...process.env, PORT: String(port), ADMIN_PASSWORD: PASSWORD, ADMIN_PASSWORD_HASH: '', SESSION_SECRET: '', VERCEL: '', BLOB_STORE_ID: '', BLOB_READ_WRITE_TOKEN: '', LOCAL_DATA_DIR: path.join(ROOT, '.data-sapatest-' + port), ...extra };
+  const env = { ...process.env, PORT: String(port), ADMIN_PASSWORD: PASSWORD, ADMIN_PASSWORD_HASH: '', ADMIN_LOGIN: 'admin@test.local', SESSION_SECRET: '', VERCEL: '', BLOB_STORE_ID: '', BLOB_READ_WRITE_TOKEN: '', LOCAL_DATA_DIR: path.join(ROOT, '.data-sapatest-' + port), ...extra };
   const child = spawn(process.execPath, ['scripts/dev-server.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; child.stdout.on('data', (d) => (log += d)); child.stderr.on('data', (d) => (log += d));
   for (let i = 0; i < 50; i++) {
@@ -63,7 +63,7 @@ async function start(port, extra) {
 }
 
 async function adminCookie(base) {
-  const r = await fetch(base + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ password: PASSWORD }) });
+  const r = await fetch(base + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ login: 'admin@test.local', password: PASSWORD }) });
   return r.headers.get('set-cookie').split(';')[0];
 }
 

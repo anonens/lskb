@@ -10,11 +10,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PASSWORD = 'test-' + crypto.randomBytes(9).toString('base64url'); // a throwaway value for this run only
+const ADMIN_LOGIN = 'admin@test.local';
+const VIEWER_LOGIN = 'viewer@test.local';
+const VIEWER_PASSWORD = 'view-' + crypto.randomBytes(9).toString('base64url');
 // a valid 1×1 JPEG
 const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
 
 async function start(port, extra) {
-  const env = { ...process.env, PORT: String(port), ADMIN_PASSWORD: PASSWORD, ADMIN_PASSWORD_HASH: '', SESSION_SECRET: '', VERCEL: '', BLOB_STORE_ID: '', BLOB_READ_WRITE_TOKEN: '', ...extra };
+  const env = { ...process.env, PORT: String(port), ADMIN_PASSWORD: PASSWORD, ADMIN_PASSWORD_HASH: '', ADMIN_LOGIN, VIEWER_LOGIN, VIEWER_PASSWORD, VIEWER_PASSWORD_HASH: '', SESSION_SECRET: '', VERCEL: '', BLOB_STORE_ID: '', BLOB_READ_WRITE_TOKEN: '', ...extra };
   const child = spawn(process.execPath, ['scripts/dev-server.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   child.stdout.on('data', (d) => (log += d));
@@ -45,31 +48,48 @@ async function suite(label, port, extra, checkStore) {
     }
     assert.equal((await fetch(base + '/photos/t_beket.jpg')).headers.get('content-type'), 'image/jpeg');
 
-    // visitor view: only weeks switched on
+    // the site is gated: no session → no data
     let r = await call('GET', '/api/data');
+    assert.equal(r.status, 401, 'data needs a session');
+
+    // a viewer (the teachers' shared login) sees only the weeks switched on
+    r = await call('POST', '/api/session', { body: { login: VIEWER_LOGIN, password: VIEWER_PASSWORD }, headers: origin });
+    assert.equal(r.status, 200); assert.equal(r.body.role, 'viewer'); assert.equal(r.body.admin, false);
+    const viewerCookie = r.headers.get('set-cookie').split(';')[0];
+    assert.match(viewerCookie, /^juz_sess=viewer\.\d+\.[\w-]+$/);
+    r = await call('GET', '/api/data', { cookie: viewerCookie });
     assert.equal(r.status, 200);
     assert.equal(r.body.state._public, true);
+    assert.ok(!r.body.admin, 'viewer is not admin');
     const pubWeeks = r.body.state.months.flatMap((m) => m.weeks);
     assert.ok(pubWeeks.length > 0 && pubWeeks.every((w) => w.published), 'only published weeks');
     assert.ok(Object.keys(r.body.state.results).every((w) => pubWeeks.some((x) => x.id === w)), 'no draft results');
+    assert.equal((await call('GET', '/api/data', { cookie: viewerCookie })).body.etag, undefined, 'viewers do not get the version tag');
 
     // login
     const sess = (await call('GET', '/api/session')).body;
+    assert.equal(sess.role, null);
     assert.equal(sess.admin, false);
     assert.equal(sess.configured, true);
     const blobMode = Boolean(extra.BLOB_STORE_ID || extra.keribailanys_STORE_ID);
     assert.equal(sess.store, blobMode ? 'blob' : 'local');
     const chk = (await call('GET', '/api/session?check=1')).body;
     if (blobMode) assert.equal(chk.storeOk, true, 'store check'); else assert.equal(chk.storeOk, undefined);
-    assert.equal((await call('POST', '/api/session', { body: { password: 'nope' }, headers: origin })).status, 401);
-    assert.equal((await call('POST', '/api/session', { body: { password: PASSWORD }, headers: { Origin: 'https://evil.example' } })).status, 403);
-    r = await call('POST', '/api/session', { body: { password: PASSWORD }, headers: origin });
-    assert.equal(r.status, 200);
+    // wrong password, and the right password under the wrong (viewer) login, are both rejected for admin
+    assert.equal((await call('POST', '/api/session', { body: { login: ADMIN_LOGIN, password: 'nope' }, headers: origin })).status, 401);
+    assert.equal((await call('POST', '/api/session', { body: { login: VIEWER_LOGIN, password: PASSWORD }, headers: origin })).status, 401, 'admin password under viewer login is not admin');
+    assert.equal((await call('POST', '/api/session', { body: { login: ADMIN_LOGIN, password: PASSWORD }, headers: { Origin: 'https://evil.example' } })).status, 403);
+    r = await call('POST', '/api/session', { body: { login: ADMIN_LOGIN, password: PASSWORD }, headers: origin });
+    assert.equal(r.status, 200); assert.equal(r.body.role, 'admin');
     const setCookie = r.headers.get('set-cookie');
-    assert.match(setCookie, /juz_admin=\d+\.[\w-]+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=2592000/);
+    assert.match(setCookie, /juz_sess=admin\.\d+\.[\w-]+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=2592000/);
     const cookie = setCookie.split(';')[0];
     assert.equal((await call('GET', '/api/session', { cookie })).body.admin, true);
     assert.equal((await call('GET', '/api/session', { cookie: cookie.slice(0, -2) + 'xx' })).body.admin, false, 'tampered cookie');
+    // a viewer cookie cannot be filed down into an admin one
+    assert.equal((await call('GET', '/api/session', { cookie: viewerCookie.replace('viewer', 'admin') })).body.admin, false, 'forged admin cookie');
+    // a viewer may read but not write
+    assert.equal((await call('PUT', '/api/data', { cookie: viewerCookie, body: { state: {}, photos: {}, baseRev: 0 }, headers: origin })).status, 401, 'viewer cannot save');
 
     // admin view has everything
     r = await call('GET', '/api/data', { cookie });
@@ -92,13 +112,13 @@ async function suite(label, port, extra, checkStore) {
     r = await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 }, headers: origin });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.state.rev, rev0 + 1);
-    const metric = (await call('GET', '/api/data')).body.state.results[metricWeek][metricId];
+    const metric = (await call('GET', '/api/data', { cookie: viewerCookie })).body.state.results[metricWeek][metricId];
     assert.equal(metric.present, 45); assert.equal(metric.total, 60); assert.equal(metric.attendancePct, 75);
     assert.equal(metric.attendanceLessons, 2); assert.equal(metric.attendanceMode, 'weighted');
     assert.equal(r.body.state.teachers.find(t => t.id === 't_kuanysh').display, 'Нұрдәулет ағай');
-    assert.equal((await call('GET', '/api/data')).body.state.outro.title, 'Тест: ' + label, 'visitors see the save');
+    assert.equal((await call('GET', '/api/data', { cookie: viewerCookie })).body.state.outro.title, 'Тест: ' + label, 'visitors see the save');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: edited, photos: full.photos, baseRev: rev0 }, headers: origin })).status, 409, 'stale save refused');
-    const pub = (await call('GET', '/api/data')).body;
+    const pub = (await call('GET', '/api/data', { cookie: viewerCookie })).body;
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: pub.state, photos: pub.photos, baseRev: rev0 + 1 }, headers: origin })).status, 400, 'visitor copy cannot be saved');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: edited, photos: { t_beket: 'data:image/jpeg;base64,AAAA' }, baseRev: rev0 + 1 }, headers: origin })).status, 400, 'inline photo refused');
     const broken = await fetch(base + '/api/data', { method: 'PUT', headers: { 'Content-Type': 'application/json', Cookie: cookie, ...origin }, body: '{broken' });
@@ -110,15 +130,16 @@ async function suite(label, port, extra, checkStore) {
     r = await call('POST', '/api/photo', { cookie, body: { teacherId: 't_beket', dataUrl: 'data:image/jpeg;base64,' + JPEG.toString('base64') }, headers: origin });
     assert.equal(r.status, 200);
     assert.match(r.body.url, /^\/api\/photo\?p=photos\/t_beket-[a-z0-9]+\.jpg$/);
-    const img = await fetch(base + r.body.url);
+    assert.equal((await fetch(base + r.body.url)).status, 401, 'uploaded photos need a session');
+    const img = await fetch(base + r.body.url, { headers: { Cookie: viewerCookie } });
     assert.equal(img.status, 200);
     assert.equal(img.headers.get('content-type'), 'image/jpeg');
     assert.ok(Buffer.from(await img.arrayBuffer()).equals(JPEG));
-    assert.equal((await fetch(base + '/api/photo?p=data/site.json')).status, 404, 'only photos are served');
+    assert.equal((await fetch(base + '/api/photo?p=data/site.json', { headers: { Cookie: cookie } })).status, 404, 'only photos are served');
     const latest = (await call('GET', '/api/data', { cookie })).body;
     r = await call('PUT', '/api/data', { cookie, body: { state: latest.state, photos: { ...latest.photos, t_beket: r.body.url }, baseRev: latest.state.rev }, headers: origin });
     assert.equal(r.status, 200);
-    assert.match((await call('GET', '/api/data')).body.photos.t_beket, /^\/api\/photo\?p=photos\//);
+    assert.match((await call('GET', '/api/data', { cookie: viewerCookie })).body.photos.t_beket, /^\/api\/photo\?p=photos\//);
 
     // two saves at the same moment: one wins, the other is told to reload
     const now = (await call('GET', '/api/data', { cookie })).body;
@@ -133,7 +154,7 @@ async function suite(label, port, extra, checkStore) {
     let cur = (await call('GET', '/api/data', { cookie })).body;
     assert.equal(typeof cur.etag, 'string', 'admin gets the version tag');
     assert.ok(!/^W\//.test(cur.etag), 'a strong tag');
-    assert.equal((await call('GET', '/api/data')).body.etag, undefined, 'visitors do not');
+    assert.equal((await call('GET', '/api/data', { cookie: viewerCookie })).body.etag, undefined, 'visitors do not');
     for (let i = 1; i <= 3; i++) {
       const s = structuredClone(cur.state);
       s.outro.title = 'Қатарынан сақтау ' + i;
@@ -149,7 +170,7 @@ async function suite(label, port, extra, checkStore) {
         assert.equal(again.status, 409, 'an outdated tag is refused');
       }
     }
-    assert.equal((await call('GET', '/api/data')).body.state.outro.title, 'Қатарынан сақтау 3');
+    assert.equal((await call('GET', '/api/data', { cookie: viewerCookie })).body.state.outro.title, 'Қатарынан сақтау 3');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: cur.state, photos: cur.photos, baseRev: cur.state.rev, baseEtag: null }, headers: origin })).status, 409, '"nothing saved yet" is refused once something is');
     assert.equal((await call('PUT', '/api/data', { cookie, body: { state: cur.state, photos: cur.photos, baseRev: cur.state.rev, baseEtag: 42 }, headers: origin })).status, 400, 'bad tag');
     const pair = await Promise.all([1, 2].map((i) => {
@@ -161,7 +182,7 @@ async function suite(label, port, extra, checkStore) {
 
     // logout
     r = await call('DELETE', '/api/session', { cookie, headers: origin });
-    assert.match(r.headers.get('set-cookie'), /juz_admin=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0/);
+    assert.match(r.headers.get('set-cookie'), /juz_sess=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0/);
 
     checkStore();
     console.log(`✓ ${label}`);
@@ -207,8 +228,10 @@ try {
       assert.equal(j.store, 'missing');
       assert.equal(j.storeOk, false);
       assert.match(j.storeMessage, /Blob/);
-      const d = await (await fetch('http://localhost:3904/api/data')).json();
-      assert.ok(d.state && d.state.teachers.length > 0, 'seed is still shown');
+      const login = await fetch('http://localhost:3904/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3904' }, body: JSON.stringify({ login: VIEWER_LOGIN, password: VIEWER_PASSWORD }) });
+      const vCookie = login.headers.get('set-cookie').split(';')[0];
+      const d = await (await fetch('http://localhost:3904/api/data', { headers: { Cookie: vCookie } })).json();
+      assert.ok(d.state && d.state.teachers.length > 0, 'seed is still shown once signed in');
       console.log('✓ no Blob store connected (as on a fresh Vercel project)');
     } finally {
       srv.child.kill();

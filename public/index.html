@@ -1251,46 +1251,49 @@ function api(method, path, body) {
   });
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
-function serverSession() { return api('GET', '/api/session').then(function (j) { srv.admin = !!j.admin; srv.checked = true; return j; }).catch(function () { srv.checked = true; return {}; }); }
-function loginBox(msg) {
+function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
+// gate = true when the whole site is locked (nothing is shown until sign-in): no cancel, cannot dismiss.
+function loginBox(msg, gate) {
   var m = $('#modal');
-  m.innerHTML = '<form class="modalBox" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT">' + LOGO +
-    '<h4 id="lgT" style="margin-top:14px">Әкімші панелі</h4><p>Кері байланыс сайтының деректері мен суреттерін осы жерден өзгертесіз.</p>' +
-    '<label class="aField"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" required></label>' +
+  m.innerHTML = '<form class="modalBox" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' + LOGO +
+    '<h4 id="lgT" style="margin-top:14px">Кіру</h4><p>' + (gate ? 'Сайтты көру үшін логин мен құпиясөзді енгізіңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
+    '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +
+    '<label class="aField" style="margin-top:10px"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" required></label>' +
     '<p id="lgErr" role="alert" style="color:var(--bad);margin:10px 0 0;min-height:1.3em">' + esc(msg || '') + '</p>' +
-    '<div class="aRow" style="margin-top:6px"><button class="aBtn" type="button" data-m="0">Бас тарту</button><button class="aBtn primary" type="submit" id="lgBtn">Кіру</button></div></form>';
+    '<div class="aRow" style="margin-top:6px">' + (gate ? '' : '<button class="aBtn" type="button" data-m="0">Бас тарту</button>') + '<button class="aBtn primary" type="submit" id="lgBtn">Кіру</button></div></form>';
   m.hidden = false;
-  var pw = $('#lgPw'); if (pw) pw.focus();
+  var el = $('#lgLogin'); if (el) el.focus();
   if (!msg) api('GET', '/api/session?check=1').then(function (j) {
-    var el = $('#lgErr');
-    if (el && !el.textContent && j && j.storeOk === false) el.textContent = j.storeMessage || 'Деректер қоймасы (Blob) қосылмаған.';
+    var e2 = $('#lgErr');
+    if (e2 && !e2.textContent && j && j.storeOk === false) e2.textContent = j.storeMessage || 'Деректер қоймасы (Blob) қосылмаған.';
   }).catch(function () {});
 }
 document.addEventListener('submit', function (ev) {
   if (!ev.target || ev.target.id !== 'loginForm') return;
   ev.preventDefault();
   var btn = $('#lgBtn'); if (btn) btn.disabled = true;
-  api('POST', '/api/session', { password: $('#lgPw').value }).then(function () {
-    srv.admin = true; admin.canEdit = true; $('#adminBtn').hidden = false;
-    // visitors only receive published weeks — reload the full data before anything can be edited
+  api('POST', '/api/session', { login: $('#lgLogin').value, password: $('#lgPw').value }).then(function (j) {
+    srv.role = j.role; srv.admin = j.role === 'admin'; srv.authed = true;
+    if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
+    // viewers get only published weeks; the admin gets everything — (re)load now that we are signed in
     return serverLoad().then(function () {
       closeModal(false);
-      if (!draft) { view.weekId = pickWeek(view.subject, view.weekId); renderAll(); }
-      openAdmin();
+      view.weekId = pickWeek(view.subject, view.weekId);
+      renderAll();
+      if (srv.admin) openAdmin();
     });
   }).catch(function (e) {
     if (btn) btn.disabled = false;
-    var el = $('#lgErr');
-    if (el) el.textContent = e.status === 401 ? 'Құпиясөз қате.' : e.status === 429 ? 'Тым көп әрекет. Біраз уақыттан кейін қайталаңыз.' : (e.body && e.body.message) || 'Кіру сәтсіз. Қайталап көріңіз.';
+    var el2 = $('#lgErr');
+    if (el2) el2.textContent = e.status === 401 ? 'Логин немесе құпиясөз қате.' : e.status === 429 ? 'Тым көп әрекет. Біраз уақыттан кейін қайталаңыз.' : (e.body && e.body.message) || 'Кіру сәтсіз. Қайталап көріңіз.';
   });
 });
 
 function detectAdmin() {
   if (SERVER) {
-    serverSession().then(function () {
-      if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
-      if (/^\/admin\/?$/.test(location.pathname) || /admin/i.test(location.hash || '')) { if (srv.admin) openAdmin(); else loginBox(); }
-    });
+    // the session was already resolved in boot(); just reflect it in the UI
+    if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
+    if (srv.admin && (/^\/admin\/?$/.test(location.pathname) || /admin/i.test(location.hash || ''))) openAdmin();
     return;
   }
   var forced = /admin/i.test(location.hash || '');
@@ -1941,7 +1944,9 @@ $('#modal').addEventListener('click', function (ev) {
     return;
   }
   var b = t.closest && t.closest('[data-m]');
-  if (b) closeModal(b.getAttribute('data-m') === '1'); else if (t === $('#modal')) closeModal(false);
+  // the sign-in gate cannot be dismissed by clicking the backdrop — there is nothing behind it yet
+  var gateOpen = $('#loginForm') && $('#loginForm').hasAttribute('data-gate');
+  if (b) closeModal(b.getAttribute('data-m') === '1'); else if (t === $('#modal') && !gateOpen) closeModal(false);
 });
 $('#modal').addEventListener('change', function (ev) {
   if (ev.target && ev.target.id === 'sdLine') sapaFillWeeks();
@@ -2158,13 +2163,22 @@ window.juzAuto = {
 };
 
 /* ================= boot ================= */
+// The whole site is locked until sign-in: show a quiet placeholder behind a login that can't be dismissed.
+function showGate() {
+  $('#acts').innerHTML = '<section class="act teacher" data-theme="dark" data-sig="1" data-flow="natural" data-fixed><div class="pin"><div class="flow"><div class="row"><div class="textCol"><h2 class="name">Кіру қажет</h2><p class="emptyNote">Бұл сайтты көру үшін логин мен құпиясөзбен кіріңіз.</p></div></div></div></div></section>';
+  loginBox(null, true);
+}
 function boot(hot) {
   document.documentElement.setAttribute('data-subj', view.subject);
   if (SERVER) {
     rainStart();
-    serverLoad().then(function () { start(hot || {}); }).catch(function () {
+    var dataError = function () {
       $('#acts').innerHTML = '<section class="act teacher" data-theme="light" data-sig="1" data-flow="natural" data-fixed><div class="pin"><div class="flow"><div class="row"><div class="textCol"><h2 class="name">Деректер жүктелмеді</h2><p class="emptyNote">Интернетті тексеріп, бетті қайта жаңартыңыз.</p></div></div></div></div></section>';
-    });
+    };
+    serverSession().then(function () {
+      if (!srv.authed) { showGate(); return; }
+      serverLoad().then(function () { start(hot || {}); }).catch(dataError);
+    }).catch(function () { showGate(); });
     return;
   }
   start(hot);
