@@ -526,17 +526,19 @@ function loginBox(msg, gate) {
   var m = $('#modal');
   var sub = SUBJ[view.subject] ? view.subject : 'math';
   m.innerHTML = '<div class="loginPage">' +
-    '<main class="lpMain"><form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
-    '<span class="lgMark">' + emblemSVG(sub) + '</span>' +
+    '<div class="lpZ" aria-hidden="true">' + emblemSVG(sub) + '</div>' +
+    '<div class="lpInner">' +
     '<span class="lpWord">' + LOGO + '</span>' +
+    '<p class="lpEyebrow">Кері байланыс</p>' +
     '<h1 class="lpTitle" id="lgT">Кіру</h1>' +
     '<p class="lgSub">' + (gate ? 'Кері байланыс сайтын көру үшін логин мен құпиясөзбен кіріңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
+    '<form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
     '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +
     '<label class="aField"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" placeholder="••••••••" required></label>' +
     '<p id="lgErr" class="lgErr" role="alert">' + esc(msg || '') + '</p>' +
-    '<button class="aBtn primary lgGo" type="submit" id="lgBtn">Кіру</button>' +
+    '<button class="lpBtn" type="submit" id="lgBtn">Кіру</button>' +
     (gate ? '' : '<button class="lgCancel" type="button" data-m="0">Бас тарту</button>') +
-    '</form></main></div>';
+    '</form></div></div>';
   m.hidden = false;
   var el = $('#lgLogin'); if (el) el.focus();
   if (!msg) api('GET', '/api/session?check=1').then(function (j) {
