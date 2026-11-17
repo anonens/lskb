@@ -426,8 +426,10 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 .lpAside{display:none}
 .lpMain{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:clamp(28px,7vw,56px) clamp(22px,6vw,48px)}
 .lpForm{width:100%;max-width:360px;display:flex;flex-direction:column}
-.lgMark{display:grid;place-items:center;width:66px;height:66px;border-radius:22px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 42%,transparent);box-shadow:0 16px 36px -16px var(--abyss),inset 0 1px 0 color-mix(in oklab,var(--ice) 18%,transparent);margin:0 auto 20px}
+.lgMark{display:grid;place-items:center;width:66px;height:66px;border-radius:22px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 42%,transparent);box-shadow:0 16px 36px -16px var(--abyss),inset 0 1px 0 color-mix(in oklab,var(--ice) 18%,transparent);margin:0 auto 14px}
 .lgMark svg{width:33px;height:33px;fill:var(--cyan)}
+.lpWord{display:block;text-align:center;color:color-mix(in oklab,var(--ice) 52%,transparent);margin:0 0 16px}
+.lpWord svg{display:inline-block;width:auto;height:16px}
 .lpTitle{font-family:var(--font-display);font-size:clamp(26px,6vw,32px);line-height:1.05;letter-spacing:-.01em;margin:0 0 8px;text-align:center}
 .lgSub{margin:0 auto 24px;max-width:32ch;font-size:14px;line-height:1.5;color:color-mix(in oklab,var(--ice) 62%,transparent);text-align:center}
 .lpForm .aField{margin-top:12px}
@@ -439,18 +441,7 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 .lgGo:disabled{opacity:.6;cursor:default}
 .lgCancel{display:block;margin:16px auto 0;background:none;border:0;color:color-mix(in oklab,var(--ice) 52%,transparent);font-family:inherit;font-size:13px;cursor:pointer;transition:color .2s var(--ease)}
 .lgCancel:hover{color:var(--ice)}
-@media (min-width:860px){
-  .lpAside{display:flex;flex:1 1 46%;max-width:560px;align-items:center;justify-content:center;padding:48px;border-right:1px solid color-mix(in oklab,var(--ice) 12%,transparent);background:linear-gradient(160deg,color-mix(in oklab,var(--cyan) 12%,transparent),#0000 58%)}
-  .lpAsideIn{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:20px;max-width:360px}
-  .lpMarkBig{display:grid;place-items:center;width:92px;height:92px;border-radius:28px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 40%,transparent);box-shadow:0 24px 60px -22px var(--abyss)}
-  .lpMarkBig svg{width:48px;height:48px;fill:var(--cyan)}
-  .lpWordBig{color:var(--ice)}
-  .lpWordBig svg{display:block;width:auto;height:30px}
-  .lpTag{margin:0;font-size:17px;line-height:1.5;color:color-mix(in oklab,var(--ice) 70%,transparent)}
-  .lpForm .lgMark{display:none}
-  .lpTitle,.lgSub{text-align:left}
-  .lgSub{margin-left:0;margin-right:0}
-}
+/* the form stays centered on every screen size, including desktop */
 .imDirect{margin:0 0 14px;padding:14px;border:1px solid color-mix(in oklab,var(--cyan) 45%,transparent);border-radius:14px;background:color-mix(in oklab,var(--cyan) 8%,transparent)}
 .imDirectHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;margin:0 0 10px}
 .imDirectHead b{font-size:15px}
@@ -1291,9 +1282,9 @@ function loginBox(msg, gate) {
   var m = $('#modal');
   var sub = SUBJ[view.subject] ? view.subject : 'math';
   m.innerHTML = '<div class="loginPage">' +
-    '<aside class="lpAside" aria-hidden="true"><div class="lpAsideIn"><span class="lpMarkBig">' + emblemSVG(sub) + '</span><span class="lpWordBig">' + LOGO + '</span><p class="lpTag">Математика · геометрия мұғалімдеріне LIVE сабаққа апталық кері байланыс</p></div></aside>' +
     '<main class="lpMain"><form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
     '<span class="lgMark">' + emblemSVG(sub) + '</span>' +
+    '<span class="lpWord">' + LOGO + '</span>' +
     '<h1 class="lpTitle" id="lgT">Кіру</h1>' +
     '<p class="lgSub">' + (gate ? 'Кері байланыс сайтын көру үшін логин мен құпиясөзбен кіріңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
     '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +

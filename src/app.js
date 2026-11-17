@@ -526,9 +526,9 @@ function loginBox(msg, gate) {
   var m = $('#modal');
   var sub = SUBJ[view.subject] ? view.subject : 'math';
   m.innerHTML = '<div class="loginPage">' +
-    '<aside class="lpAside" aria-hidden="true"><div class="lpAsideIn"><span class="lpMarkBig">' + emblemSVG(sub) + '</span><span class="lpWordBig">' + LOGO + '</span><p class="lpTag">Математика · геометрия мұғалімдеріне LIVE сабаққа апталық кері байланыс</p></div></aside>' +
     '<main class="lpMain"><form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
     '<span class="lgMark">' + emblemSVG(sub) + '</span>' +
+    '<span class="lpWord">' + LOGO + '</span>' +
     '<h1 class="lpTitle" id="lgT">Кіру</h1>' +
     '<p class="lgSub">' + (gate ? 'Кері байланыс сайтын көру үшін логин мен құпиясөзбен кіріңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
     '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +
