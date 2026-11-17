@@ -403,25 +403,39 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 .bmLink{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;background:var(--cyan);color:var(--teal);font-size:13px;font-weight:700;letter-spacing:.03em;text-decoration:none;cursor:grab;white-space:nowrap}
 .bmLink svg{width:12px;height:16px;fill:currentColor;flex:none}
 .modalBox p.imErr{min-height:1.3em;margin:8px 0 10px;color:var(--bad)}
-/* sign-in card */
-.loginCard{width:min(400px,100%);padding:clamp(24px,5vw,36px) clamp(22px,5vw,34px) clamp(22px,5vw,30px);text-align:center;position:relative;overflow:hidden}
-.loginCard::before{content:"";position:absolute;inset:0 0 auto 0;height:200px;background:radial-gradient(70% 100% at 50% -20%,color-mix(in oklab,var(--cyan) 24%,transparent),#0000 72%);pointer-events:none}
-.lgTop{position:relative;display:flex;flex-direction:column;align-items:center;gap:13px;margin-bottom:16px}
-.lgMark{display:grid;place-items:center;width:64px;height:64px;border-radius:20px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 42%,transparent);box-shadow:0 14px 34px -14px var(--abyss),inset 0 1px 0 color-mix(in oklab,var(--ice) 18%,transparent)}
-.lgMark svg{width:32px;height:32px;fill:var(--cyan)}
-.lgWord{color:color-mix(in oklab,var(--ice) 60%,transparent)}
-.lgWord svg{display:block;width:auto;height:17px}
-.loginCard h4{position:relative;font-size:23px;margin:0 0 6px;text-align:center}
-.lgSub{margin:0 auto 22px;max-width:30ch;font-size:13.5px;line-height:1.5;color:color-mix(in oklab,var(--ice) 60%,transparent)}
-.lgFields{display:flex;flex-direction:column;gap:12px;text-align:left}
-.loginCard .aField>span{font-size:10.5px;letter-spacing:.1em}
-.loginCard .aIn{padding:12px 14px;border-radius:12px;font-size:15px;background:color-mix(in oklab,var(--abyss) 38%,transparent);border-color:color-mix(in oklab,var(--ice) 18%,transparent)}
-.loginCard .aIn::placeholder{color:color-mix(in oklab,var(--ice) 32%,transparent)}
-.lgErr{min-height:1.2em;margin:13px 0 0;font-size:13px;line-height:1.4;color:var(--bad);text-align:center}
-.lgGo{width:100%;justify-content:center;margin-top:16px;padding:13px;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:.01em}
+/* full-screen sign-in page: the modal goes edge to edge and opaque when it holds the login form */
+.modal:has(#loginForm){padding:0;background:var(--deep);place-items:stretch;overflow:auto}
+.loginPage{display:flex;width:100%;min-height:100%;position:relative;color:var(--ice)}
+.loginPage::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(80% 60% at 82% -10%,color-mix(in oklab,var(--cyan) 20%,transparent),#0000 60%),radial-gradient(70% 70% at -10% 110%,color-mix(in oklab,var(--cyan) 12%,transparent),#0000 60%)}
+/* left brand panel — desktop only */
+.lpAside{display:none}
+.lpMain{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:clamp(28px,7vw,56px) clamp(22px,6vw,48px)}
+.lpForm{width:100%;max-width:360px;display:flex;flex-direction:column}
+.lgMark{display:grid;place-items:center;width:66px;height:66px;border-radius:22px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 42%,transparent);box-shadow:0 16px 36px -16px var(--abyss),inset 0 1px 0 color-mix(in oklab,var(--ice) 18%,transparent);margin:0 auto 20px}
+.lgMark svg{width:33px;height:33px;fill:var(--cyan)}
+.lpTitle{font-family:var(--font-display);font-size:clamp(26px,6vw,32px);line-height:1.05;letter-spacing:-.01em;margin:0 0 8px;text-align:center}
+.lgSub{margin:0 auto 24px;max-width:32ch;font-size:14px;line-height:1.5;color:color-mix(in oklab,var(--ice) 62%,transparent);text-align:center}
+.lpForm .aField{margin-top:12px}
+.lpForm .aField>span{font-size:10.5px;letter-spacing:.1em}
+.lpForm .aIn{padding:13px 15px;border-radius:13px;font-size:16px;background:color-mix(in oklab,var(--abyss) 36%,transparent);border-color:color-mix(in oklab,var(--ice) 18%,transparent)}
+.lpForm .aIn::placeholder{color:color-mix(in oklab,var(--ice) 30%,transparent)}
+.lgErr{min-height:1.2em;margin:14px 0 0;font-size:13px;line-height:1.4;color:var(--bad);text-align:center}
+.lgGo{width:100%;justify-content:center;margin-top:18px;padding:14px;border-radius:13px;font-size:16px;font-weight:700;letter-spacing:.01em}
 .lgGo:disabled{opacity:.6;cursor:default}
-.lgCancel{display:block;margin:14px auto 0;background:none;border:0;color:color-mix(in oklab,var(--ice) 52%,transparent);font-family:inherit;font-size:13px;cursor:pointer;transition:color .2s var(--ease)}
+.lgCancel{display:block;margin:16px auto 0;background:none;border:0;color:color-mix(in oklab,var(--ice) 52%,transparent);font-family:inherit;font-size:13px;cursor:pointer;transition:color .2s var(--ease)}
 .lgCancel:hover{color:var(--ice)}
+@media (min-width:860px){
+  .lpAside{display:flex;flex:1 1 46%;max-width:560px;align-items:center;justify-content:center;padding:48px;border-right:1px solid color-mix(in oklab,var(--ice) 12%,transparent);background:linear-gradient(160deg,color-mix(in oklab,var(--cyan) 12%,transparent),#0000 58%)}
+  .lpAsideIn{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:20px;max-width:360px}
+  .lpMarkBig{display:grid;place-items:center;width:92px;height:92px;border-radius:28px;background:color-mix(in oklab,var(--cyan) 16%,transparent);border:1px solid color-mix(in oklab,var(--cyan) 40%,transparent);box-shadow:0 24px 60px -22px var(--abyss)}
+  .lpMarkBig svg{width:48px;height:48px;fill:var(--cyan)}
+  .lpWordBig{color:var(--ice)}
+  .lpWordBig svg{display:block;width:auto;height:30px}
+  .lpTag{margin:0;font-size:17px;line-height:1.5;color:color-mix(in oklab,var(--ice) 70%,transparent)}
+  .lpForm .lgMark{display:none}
+  .lpTitle,.lgSub{text-align:left}
+  .lgSub{margin-left:0;margin-right:0}
+}
 .imDirect{margin:0 0 14px;padding:14px;border:1px solid color-mix(in oklab,var(--cyan) 45%,transparent);border-radius:14px;background:color-mix(in oklab,var(--cyan) 8%,transparent)}
 .imDirectHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;margin:0 0 10px}
 .imDirectHead b{font-size:15px}

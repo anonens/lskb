@@ -520,20 +520,23 @@ function api(method, path, body) {
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
-// gate = true when the whole site is locked (nothing is shown until sign-in): no cancel, cannot dismiss.
+// A full-screen sign-in page. gate = true when the whole site is locked (nothing is shown until
+// sign-in): no cancel, cannot dismiss. The .modal becomes full-bleed when it holds #loginForm (CSS :has).
 function loginBox(msg, gate) {
   var m = $('#modal');
-  m.innerHTML = '<form class="modalBox loginCard" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
-    '<div class="lgTop"><span class="lgMark">' + emblemSVG(SUBJ[view.subject] ? view.subject : 'math') + '</span><span class="lgWord">' + LOGO + '</span></div>' +
-    '<h4 id="lgT">Кіру</h4>' +
+  var sub = SUBJ[view.subject] ? view.subject : 'math';
+  m.innerHTML = '<div class="loginPage">' +
+    '<aside class="lpAside" aria-hidden="true"><div class="lpAsideIn"><span class="lpMarkBig">' + emblemSVG(sub) + '</span><span class="lpWordBig">' + LOGO + '</span><p class="lpTag">Математика · геометрия мұғалімдеріне LIVE сабаққа апталық кері байланыс</p></div></aside>' +
+    '<main class="lpMain"><form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
+    '<span class="lgMark">' + emblemSVG(sub) + '</span>' +
+    '<h1 class="lpTitle" id="lgT">Кіру</h1>' +
     '<p class="lgSub">' + (gate ? 'Кері байланыс сайтын көру үшін логин мен құпиясөзбен кіріңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
-    '<div class="lgFields">' +
     '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +
     '<label class="aField"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" placeholder="••••••••" required></label>' +
-    '</div>' +
     '<p id="lgErr" class="lgErr" role="alert">' + esc(msg || '') + '</p>' +
     '<button class="aBtn primary lgGo" type="submit" id="lgBtn">Кіру</button>' +
-    (gate ? '' : '<button class="lgCancel" type="button" data-m="0">Бас тарту</button>') + '</form>';
+    (gate ? '' : '<button class="lgCancel" type="button" data-m="0">Бас тарту</button>') +
+    '</form></main></div>';
   m.hidden = false;
   var el = $('#lgLogin'); if (el) el.focus();
   if (!msg) api('GET', '/api/session?check=1').then(function (j) {
