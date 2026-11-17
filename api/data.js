@@ -2,14 +2,17 @@
 // PUT  /api/data  — the admin saves: { state, photos, baseRev, baseEtag }. Refused with 409 if the site changed meanwhile.
 import crypto from 'node:crypto';
 import { readBody, send, fail, httpError, sameOrigin } from '../lib/http.js';
-import { isAdmin } from '../lib/auth.js';
+import { isAdmin, sessionRole } from '../lib/auth.js';
 import { readData, writeData } from '../lib/store.js';
 import { validateState, validatePhotos, publicView } from '../lib/validate.js';
 
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const admin = await isAdmin(req);
+      // the whole site is behind the login: a visitor must be signed in, as a viewer or the admin
+      const role = await sessionRole(req);
+      if (!role) throw httpError(401, 'Кіру қажет.');
+      const admin = role === 'admin';
       // the admin also gets the version tag (etag) of what was read: the next save quotes it
       const { data, etag } = await readData({ fresh: admin, withEtag: admin });
       return send(res, 200, admin ? { ...data, admin: true, etag } : publicView(data));

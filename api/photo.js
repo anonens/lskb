@@ -1,7 +1,7 @@
 // GET  /api/photo?p=photos/<name>.jpg  — an uploaded teacher photo (names are unique, so it is cached for a year)
 // POST /api/photo  { teacherId, dataUrl }  — the admin uploads a photo (already resized by the browser)
 import { readBody, send, fail, httpError, sameOrigin } from '../lib/http.js';
-import { isAdmin } from '../lib/auth.js';
+import { isAdmin, isViewer } from '../lib/auth.js';
 import { putPhoto, readPhoto } from '../lib/store.js';
 
 const TYPES = { 'image/jpeg': [0xff, 0xd8, 0xff], 'image/png': [0x89, 0x50, 0x4e, 0x47], 'image/webp': [0x52, 0x49, 0x46, 0x46] };
@@ -9,6 +9,7 @@ const TYPES = { 'image/jpeg': [0xff, 0xd8, 0xff], 'image/png': [0x89, 0x50, 0x4e
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
+      if (!(await isViewer(req))) throw httpError(401, 'Кіру қажет.');
       const name = new URL(req.url, 'http://local').searchParams.get('p') || '';
       const photo = await readPhoto(name);
       if (!photo) throw httpError(404, 'Фото табылмады.', 'not_found');
