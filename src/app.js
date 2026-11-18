@@ -499,7 +499,13 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
+  if (t.closest && t.closest('#logoutBtn')) { doLogout(); return; }
 });
+// Sign out: drop the session cookie, then reload so the gate comes back.
+function doLogout() {
+  var b = $('#logoutBtn'); if (b) { b.disabled = true; b.textContent = 'Шығуда…'; }
+  api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; });
+}
 
 /* ================= admin: access ================= */
 var admin = { open: false, tab: 'results', weekId: null, monthId: null, canEdit: false };
@@ -520,15 +526,25 @@ function api(method, path, body) {
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
-// gate = true when the whole site is locked (nothing is shown until sign-in): no cancel, cannot dismiss.
+// A full-screen sign-in page. gate = true when the whole site is locked (nothing is shown until
+// sign-in): no cancel, cannot dismiss. The .modal becomes full-bleed when it holds #loginForm (CSS :has).
 function loginBox(msg, gate) {
   var m = $('#modal');
-  m.innerHTML = '<form class="modalBox" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' + LOGO +
-    '<h4 id="lgT" style="margin-top:14px">Кіру</h4><p>' + (gate ? 'Сайтты көру үшін логин мен құпиясөзді енгізіңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
+  var sub = SUBJ[view.subject] ? view.subject : 'math';
+  m.innerHTML = '<div class="loginPage">' +
+    '<div class="lpZ" aria-hidden="true">' + emblemSVG(sub) + '</div>' +
+    '<div class="lpInner">' +
+    '<span class="lpWord">' + LOGO + '</span>' +
+    '<p class="lpEyebrow">Кері байланыс</p>' +
+    '<h1 class="lpTitle" id="lgT">Кіру</h1>' +
+    '<p class="lgSub">' + (gate ? 'Кері байланыс сайтын көру үшін логин мен құпиясөзбен кіріңіз.' : 'Деректер мен суреттерді өзгерту үшін әкімші логинімен кіріңіз.') + '</p>' +
+    '<form class="lpForm" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="lgT"' + (gate ? ' data-gate="1"' : '') + '>' +
     '<label class="aField"><span>Логин</span><input class="aIn" type="email" id="lgLogin" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="пошта" required></label>' +
-    '<label class="aField" style="margin-top:10px"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" required></label>' +
-    '<p id="lgErr" role="alert" style="color:var(--bad);margin:10px 0 0;min-height:1.3em">' + esc(msg || '') + '</p>' +
-    '<div class="aRow" style="margin-top:6px">' + (gate ? '' : '<button class="aBtn" type="button" data-m="0">Бас тарту</button>') + '<button class="aBtn primary" type="submit" id="lgBtn">Кіру</button></div></form>';
+    '<label class="aField"><span>Құпиясөз</span><input class="aIn" type="password" id="lgPw" autocomplete="current-password" placeholder="••••••••" required></label>' +
+    '<p id="lgErr" class="lgErr" role="alert">' + esc(msg || '') + '</p>' +
+    '<button class="lpBtn" type="submit" id="lgBtn">Кіру</button>' +
+    (gate ? '' : '<button class="lgCancel" type="button" data-m="0">Бас тарту</button>') +
+    '</form></div></div>';
   m.hidden = false;
   var el = $('#lgLogin'); if (el) el.focus();
   if (!msg) api('GET', '/api/session?check=1').then(function (j) {
@@ -542,6 +558,7 @@ document.addEventListener('submit', function (ev) {
   var btn = $('#lgBtn'); if (btn) btn.disabled = true;
   api('POST', '/api/session', { login: $('#lgLogin').value, password: $('#lgPw').value }).then(function (j) {
     srv.role = j.role; srv.admin = j.role === 'admin'; srv.authed = true;
+    $('#logoutBtn').hidden = false;
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     // viewers get only published weeks; the admin gets everything — (re)load now that we are signed in
     return serverLoad().then(function () {
@@ -560,6 +577,7 @@ document.addEventListener('submit', function (ev) {
 function detectAdmin() {
   if (SERVER) {
     // the session was already resolved in boot(); just reflect it in the UI
+    if (srv.authed) $('#logoutBtn').hidden = false;
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     if (srv.admin && (/^\/admin\/?$/.test(location.pathname) || /admin/i.test(location.hash || ''))) openAdmin();
     return;
@@ -933,7 +951,7 @@ function onAdminClick(ev) {
       return;
     }
     case 'goto-week': admin.weekId = id; admin.tab = 'results'; renderAdmin(); $('#admin').scrollTop = 0; return;
-    case 'logout': api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; }); return;
+    case 'logout': doLogout(); return;
     case 'import': importBox(); return;
   }
 }
