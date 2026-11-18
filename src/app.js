@@ -499,7 +499,13 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
+  if (t.closest && t.closest('#logoutBtn')) { doLogout(); return; }
 });
+// Sign out: drop the session cookie, then reload so the gate comes back.
+function doLogout() {
+  var b = $('#logoutBtn'); if (b) { b.disabled = true; b.textContent = 'Шығуда…'; }
+  api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; });
+}
 
 /* ================= admin: access ================= */
 var admin = { open: false, tab: 'results', weekId: null, monthId: null, canEdit: false };
@@ -552,6 +558,7 @@ document.addEventListener('submit', function (ev) {
   var btn = $('#lgBtn'); if (btn) btn.disabled = true;
   api('POST', '/api/session', { login: $('#lgLogin').value, password: $('#lgPw').value }).then(function (j) {
     srv.role = j.role; srv.admin = j.role === 'admin'; srv.authed = true;
+    $('#logoutBtn').hidden = false;
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     // viewers get only published weeks; the admin gets everything — (re)load now that we are signed in
     return serverLoad().then(function () {
@@ -570,6 +577,7 @@ document.addEventListener('submit', function (ev) {
 function detectAdmin() {
   if (SERVER) {
     // the session was already resolved in boot(); just reflect it in the UI
+    if (srv.authed) $('#logoutBtn').hidden = false;
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     if (srv.admin && (/^\/admin\/?$/.test(location.pathname) || /admin/i.test(location.hash || ''))) openAdmin();
     return;
@@ -943,7 +951,7 @@ function onAdminClick(ev) {
       return;
     }
     case 'goto-week': admin.weekId = id; admin.tab = 'results'; renderAdmin(); $('#admin').scrollTop = 0; return;
-    case 'logout': api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; }); return;
+    case 'logout': doLogout(); return;
     case 'import': importBox(); return;
   }
 }

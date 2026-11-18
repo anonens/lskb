@@ -82,6 +82,9 @@ button{font:inherit;color:inherit}
 .adminBtn[data-dirty]::before{content:"";display:inline-block;width:7px;height:7px;border-radius:9px;background:var(--warn);margin-right:7px;vertical-align:1px}
 .subj .adminBtn{display:inline-flex;align-items:center;gap:7px;box-shadow:none;margin-left:2px;padding:5px 13px 5px 9px;font-weight:600;background:color-mix(in oklab,var(--acc) 30%,transparent);color:var(--ink);transition:background .25s var(--ease),color .25s var(--ease)}
 .subj .adminBtn:hover{background:var(--acc);color:var(--chipfg)}
+.logoutBtn{flex:none;cursor:pointer;border:1px solid color-mix(in oklab,var(--ink) 24%,transparent);background:none;color:var(--ink);border-radius:999px;padding:6px 13px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;transition:border-color .22s var(--ease),background .22s var(--ease),opacity .2s}
+.logoutBtn:hover{border-color:color-mix(in oklab,var(--ink) 52%,transparent);background:color-mix(in oklab,var(--ink) 8%,transparent)}
+.logoutBtn:disabled{opacity:.5;cursor:default}
 .subj .adminBtn[hidden]{display:none!important}
 .adminBtn svg{width:12px;height:12px;flex:none;fill:currentColor}
 .subj .adminBtn[data-dirty]::before{margin-right:0}
