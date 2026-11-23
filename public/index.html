@@ -100,6 +100,9 @@ button{font:inherit;color:inherit}
 .subj .adminBtn[hidden]{display:none!important}
 .adminBtn svg{width:12px;height:12px;flex:none;fill:currentColor}
 .subj .adminBtn[data-dirty]::before{margin-right:0}
+.logoutBtn{flex:none;cursor:pointer;border:1px solid color-mix(in oklab,var(--ink) 30%,transparent);border-radius:999px;padding:7px 14px;background:none;color:var(--ink);font-size:14px;font-weight:500;white-space:nowrap;transition:background .2s var(--ease)}
+.logoutBtn:hover{background:color-mix(in oklab,var(--ink) 12%,transparent)}
+.logoutBtn:disabled{opacity:.5;cursor:wait}
 
 /* ---------- acts ---------- */
 @property --a{syntax:"<number>";inherits:true;initial-value:1}
@@ -451,6 +454,8 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 @media (max-width:760px){
   .hdr{padding:calc(10px + env(safe-area-inset-top,0px)) var(--pad) 10px;gap:8px 10px;flex-wrap:wrap}
   .hdrDivider,.hdrLabel,.weeksLabel{display:none}
+  .hdrMark{order:-2}
+  .logoutBtn{order:-1;margin-left:auto;padding:6px 11px}
   .subjBtn{padding:5px 10px 5px 7px;font-size:10px}
   .subjBtn .full{display:none}.subjBtn .short{display:inline}
   .weeks{order:5;flex:1 1 100%;margin-left:0}
@@ -509,6 +514,7 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 <header class="hdr" id="hdr">
 <a class="hdrMark" href="#top" id="hdrHome" aria-label="Басына оралу"><span id="logoSlot"></span><span class="hdrDivider"></span><span class="hdrLabel">Кері байланыс</span></a>
 <nav class="subj" id="subjNav" aria-label="Пән"></nav>
+<button class="logoutBtn" id="logoutBtn" type="button" hidden>Шығу</button>
 <div class="weeks" id="weeks" role="group" aria-label="Апта"></div>
 <button class="adminBtn" id="adminBtn" type="button" hidden>Әкімші</button>
 </header>
@@ -865,6 +871,7 @@ function renderHeader() {
       '<span class="full">' + esc(S.name) + '</span><span class="short">' + esc(S.short) + '</span></button>';
   }).join('');
   nav.appendChild(adminBtnEl); // the admin entry sits right after Geometry (hidden for visitors)
+  $('#logoutBtn').hidden = !SERVER || !srv.authed;
   var ws = visibleWeeks(d, view.subject, previewDrafts());
   var box = $('#weeks');
   box.innerHTML = (ws.length ? '<span class="weeksLabel">Апта</span>' : '') + ws.map(function (x) {
@@ -1231,6 +1238,7 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
+  if (t.closest && t.closest('#logoutBtn')) { logout(); return; }
 });
 
 /* ================= admin: access ================= */
@@ -1252,6 +1260,20 @@ function api(method, path, body) {
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
+var loggingOut = false;
+function logout() {
+  if (!SERVER || loggingOut) return;
+  loggingOut = true;
+  var buttons = $$('#logoutBtn, [data-act="logout"]');
+  buttons.forEach(function (b) { b.disabled = true; });
+  api('DELETE', '/api/session').then(function () {
+    location.replace('/');
+  }).catch(function () {
+    loggingOut = false;
+    buttons.forEach(function (b) { b.disabled = false; });
+    toast('Шығу сәтсіз. Қайталап көріңіз.', 'bad');
+  });
+}
 // gate = true when the whole site is locked (nothing is shown until sign-in): no cancel, cannot dismiss.
 function loginBox(msg, gate) {
   var m = $('#modal');
@@ -1665,7 +1687,7 @@ function onAdminClick(ev) {
       return;
     }
     case 'goto-week': admin.weekId = id; admin.tab = 'results'; renderAdmin(); $('#admin').scrollTop = 0; return;
-    case 'logout': api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; }); return;
+    case 'logout': logout(); return;
     case 'import': importBox(); return;
   }
 }

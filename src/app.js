@@ -133,6 +133,7 @@ function renderHeader() {
       '<span class="full">' + esc(S.name) + '</span><span class="short">' + esc(S.short) + '</span></button>';
   }).join('');
   nav.appendChild(adminBtnEl); // the admin entry sits right after Geometry (hidden for visitors)
+  $('#logoutBtn').hidden = !SERVER || !srv.authed;
   var ws = visibleWeeks(d, view.subject, previewDrafts());
   var box = $('#weeks');
   box.innerHTML = (ws.length ? '<span class="weeksLabel">Апта</span>' : '') + ws.map(function (x) {
@@ -499,6 +500,7 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
+  if (t.closest && t.closest('#logoutBtn')) { logout(); return; }
 });
 
 /* ================= admin: access ================= */
@@ -520,6 +522,20 @@ function api(method, path, body) {
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
+var loggingOut = false;
+function logout() {
+  if (!SERVER || loggingOut) return;
+  loggingOut = true;
+  var buttons = $$('#logoutBtn, [data-act="logout"]');
+  buttons.forEach(function (b) { b.disabled = true; });
+  api('DELETE', '/api/session').then(function () {
+    location.replace('/');
+  }).catch(function () {
+    loggingOut = false;
+    buttons.forEach(function (b) { b.disabled = false; });
+    toast('Шығу сәтсіз. Қайталап көріңіз.', 'bad');
+  });
+}
 // gate = true when the whole site is locked (nothing is shown until sign-in): no cancel, cannot dismiss.
 function loginBox(msg, gate) {
   var m = $('#modal');
@@ -933,7 +949,7 @@ function onAdminClick(ev) {
       return;
     }
     case 'goto-week': admin.weekId = id; admin.tab = 'results'; renderAdmin(); $('#admin').scrollTop = 0; return;
-    case 'logout': api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; }); return;
+    case 'logout': logout(); return;
     case 'import': importBox(); return;
   }
 }
