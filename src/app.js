@@ -123,6 +123,7 @@ function pickWeek(subject, prefer) {
 var KEY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1a4.5 4.5 0 0 0-4.27 5.92L1 12.15V15h2.85l.65-.65V13h1.35l.65-.65V11h1.35l1.23-1.23A4.5 4.5 0 1 0 10.5 1Zm1.25 4.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/></svg>';
 var adminBtnEl = $('#adminBtn');
 adminBtnEl.innerHTML = KEY_ICON + '<span>Әкімші</span>';
+adminBtnEl.setAttribute('aria-label', 'Әкімші'); adminBtnEl.title = 'Әкімші'; // the label hides on phones
 function renderHeader() {
   var d = cur();
   $('#logoSlot').innerHTML = LOGO;

@@ -85,7 +85,10 @@ button{font:inherit;color:inherit}
 .subjBtn svg{width:11px;height:14px;flex:none;fill:currentColor}
 .subjBtn[aria-pressed="true"]{background:var(--ink);color:var(--chipfg)}
 .subjBtn .short{display:none}
-.weeks{display:flex;align-items:center;gap:7px;margin-left:auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding-block:2px;-webkit-overflow-scrolling:touch}
+/* the week pills take the space left on the row and scroll sideways when there are many, instead of
+   wrapping the header onto a second line; the auto margin keeps them right-aligned while they fit */
+.weeks{display:flex;align-items:center;gap:7px;flex:1 1 0;min-width:0;overflow-x:auto;scrollbar-width:none;padding-block:2px;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,#0000,#000 22px);mask-image:linear-gradient(90deg,#0000,#000 22px)}
+.weeks>:first-child{margin-left:auto}
 .weeks::-webkit-scrollbar{display:none}
 .weeksLabel{font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.5;margin-right:2px;flex:none}
 .weekBtn{flex:none;cursor:pointer;white-space:nowrap;border:1px solid color-mix(in oklab,var(--ink) 24%,transparent);background:none;color:var(--ink);border-radius:999px;padding:6px 13px;font-size:11px;font-weight:500;letter-spacing:.09em;transition:all .22s var(--ease)}
@@ -478,6 +481,10 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
 
 /* ---------- small screens ---------- */
+/* mid widths: drop the «Кері байланыс» label so the week pills keep room on the one header row */
+@media (max-width:1100px){
+  .hdrDivider,.hdrLabel{display:none}
+}
 @media (max-width:760px){
   .hdr{padding:calc(10px + env(safe-area-inset-top,0px)) var(--pad) 10px;gap:8px 10px;flex-wrap:wrap}
   .hdrDivider,.hdrLabel,.weeksLabel{display:none}
@@ -506,6 +513,11 @@ html.finaleOn,html.finaleOn body{overflow:hidden}
   .rosterPh{width:42px;height:42px}
   .rosterName{font-size:15.5px}
   .toList{padding:11px 16px 11px 13px}
+}
+/* phones: the admin entry shrinks to its key icon so logo, subjects and «Шығу» stay on one row */
+@media (max-width:480px){
+  .subj .adminBtn span{display:none}
+  .subj .adminBtn{padding:5px 8px}
 }
 @media (max-width:420px){
   .pill{padding:5px 11px;font-size:10px;letter-spacing:.1em}
@@ -887,6 +899,7 @@ function pickWeek(subject, prefer) {
 var KEY_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1a4.5 4.5 0 0 0-4.27 5.92L1 12.15V15h2.85l.65-.65V13h1.35l.65-.65V11h1.35l1.23-1.23A4.5 4.5 0 1 0 10.5 1Zm1.25 4.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/></svg>';
 var adminBtnEl = $('#adminBtn');
 adminBtnEl.innerHTML = KEY_ICON + '<span>Әкімші</span>';
+adminBtnEl.setAttribute('aria-label', 'Әкімші'); adminBtnEl.title = 'Әкімші'; // the label hides on phones
 function renderHeader() {
   var d = cur();
   $('#logoSlot').innerHTML = LOGO;
