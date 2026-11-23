@@ -133,6 +133,7 @@ function renderHeader() {
       '<span class="full">' + esc(S.name) + '</span><span class="short">' + esc(S.short) + '</span></button>';
   }).join('');
   nav.appendChild(adminBtnEl); // the admin entry sits right after Geometry (hidden for visitors)
+  $('#logoutBtn').hidden = !SERVER || !srv.authed;
   var ws = visibleWeeks(d, view.subject, previewDrafts());
   var box = $('#weeks');
   box.innerHTML = (ws.length ? '<span class="weeksLabel">Апта</span>' : '') + ws.map(function (x) {
@@ -499,13 +500,8 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (t.closest && t.closest('#adminBtn')) { openAdmin(); return; }
-  if (t.closest && t.closest('#logoutBtn')) { doLogout(); return; }
+  if (t.closest && t.closest('#logoutBtn')) { logout(); return; }
 });
-// Sign out: drop the session cookie, then reload so the gate comes back.
-function doLogout() {
-  var b = $('#logoutBtn'); if (b) { b.disabled = true; b.textContent = 'Шығуда…'; }
-  api('DELETE', '/api/session').catch(function () {}).then(function () { location.href = '/'; });
-}
 
 /* ================= admin: access ================= */
 var admin = { open: false, tab: 'results', weekId: null, monthId: null, canEdit: false };
@@ -526,6 +522,21 @@ function api(method, path, body) {
 }
 function serverLoad() { return api('GET', '/api/data').then(function (j) { D = j.state; P = j.photos || {}; srv.etag = j.etag; }); } // etag: only for the admin
 function serverSession() { return api('GET', '/api/session').then(function (j) { srv.role = j.role || null; srv.admin = j.role === 'admin'; srv.authed = !!j.role; srv.checked = true; return j; }).catch(function () { srv.checked = true; srv.authed = false; return {}; }); }
+// Sign out (header «Шығу» and the admin panel): drop the session, then reload to the sign-in gate.
+var loggingOut = false;
+function logout() {
+  if (!SERVER || loggingOut) return;
+  loggingOut = true;
+  var buttons = $$('#logoutBtn, [data-act="logout"]');
+  buttons.forEach(function (b) { b.disabled = true; });
+  api('DELETE', '/api/session').then(function () {
+    location.replace('/');
+  }).catch(function () {
+    loggingOut = false;
+    buttons.forEach(function (b) { b.disabled = false; });
+    toast('Шығу сәтсіз. Қайталап көріңіз.', 'bad');
+  });
+}
 // A full-screen sign-in page. gate = true when the whole site is locked (nothing is shown until
 // sign-in): no cancel, cannot dismiss. The .modal becomes full-bleed when it holds #loginForm (CSS :has).
 function loginBox(msg, gate) {
@@ -558,7 +569,6 @@ document.addEventListener('submit', function (ev) {
   var btn = $('#lgBtn'); if (btn) btn.disabled = true;
   api('POST', '/api/session', { login: $('#lgLogin').value, password: $('#lgPw').value }).then(function (j) {
     srv.role = j.role; srv.admin = j.role === 'admin'; srv.authed = true;
-    $('#logoutBtn').hidden = false;
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     // viewers get only published weeks; the admin gets everything — (re)load now that we are signed in
     return serverLoad().then(function () {
@@ -576,8 +586,7 @@ document.addEventListener('submit', function (ev) {
 
 function detectAdmin() {
   if (SERVER) {
-    // the session was already resolved in boot(); just reflect it in the UI
-    if (srv.authed) $('#logoutBtn').hidden = false;
+    // the session was already resolved in boot(); just reflect it in the UI (renderHeader shows «Шығу»)
     if (srv.admin) { admin.canEdit = true; $('#adminBtn').hidden = false; }
     if (srv.admin && (/^\/admin\/?$/.test(location.pathname) || /admin/i.test(location.hash || ''))) openAdmin();
     return;
@@ -951,7 +960,7 @@ function onAdminClick(ev) {
       return;
     }
     case 'goto-week': admin.weekId = id; admin.tab = 'results'; renderAdmin(); $('#admin').scrollTop = 0; return;
-    case 'logout': doLogout(); return;
+    case 'logout': logout(); return;
     case 'import': importBox(); return;
   }
 }
